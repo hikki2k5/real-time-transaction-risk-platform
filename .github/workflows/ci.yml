@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  banking-core-tests:
+    name: banking-core Java tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run banking-core tests
+        working-directory: services/banking-core
+        run: gradle test --no-daemon
+
+  fraud-decision-api-tests:
+    name: fraud-decision-api Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/fraud-decision-api/requirements.txt
+
+      - name: Install dependencies
+        working-directory: services/fraud-decision-api
+        run: python -m pip install -r requirements.txt
+
+      - name: Run fraud-decision-api tests
+        working-directory: services/fraud-decision-api
+        run: python -m pytest
+
+  training-tests:
+    name: training Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipelines/training/requirements.txt
+
+      - name: Install test dependencies
+        run: python -m pip install pandas==2.2.2
+
+      - name: Run training tests if present
+        working-directory: pipelines/training
+        run: |
+          if [ -d tests ]; then
+            python -m unittest discover -s tests
+          else
+            echo "No training tests found; skipping."
+          fi
+
+  spark-streaming-tests:
+    name: spark-streaming Python tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run spark-streaming tests if present
+        working-directory: pipelines/spark-streaming
+        run: |
+          if [ -d tests ]; then
+            python -m unittest discover -s tests
+          else
+            echo "No spark-streaming tests found; skipping."
+          fi
+
+  docker-builds:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    needs:
+      - banking-core-tests
+      - fraud-decision-api-tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create local fallback model placeholder for image build
+        run: |
+          mkdir -p pipelines/training/model-artifacts/fraud-risk-model
+          printf '{"model_name":"fraud-risk-model","selected_candidate":"ci-placeholder","feature_columns":[]}\n' \
+            > pipelines/training/model-artifacts/fraud-risk-model/metadata.json
+          printf 'ci-placeholder\n' > pipelines/training/model-artifacts/fraud-risk-model/model.joblib
+
+      - name: Build banking-core image
+        run: docker build -t banking-core:ci services/banking-core
+
+      - name: Build fraud-decision-api image
+        run: docker build -t fraud-decision-api:ci -f services/fraud-decision-api/Dockerfile .
+
+  kubernetes-yaml:
+    name: Kubernetes YAML validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate YAML syntax
+        run: |
+          python -m pip install pyyaml
+          python - <<'PY'
+          import pathlib
+          import yaml
+
+          files = list(pathlib.Path("infra/k8s").rglob("*.yaml"))
+          for file in files:
+              yaml.safe_load(file.read_text(encoding="utf-8"))
+          print(f"Validated YAML syntax for {len(files)} Kubernetes files.")
+          PY
+
+      - name: Install kubeconform
+        run: |
+          curl -L -o kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf kubeconform.tar.gz kubeconform
+          sudo mv kubeconform /usr/local/bin/kubeconform
+
+      - name: Validate Kubernetes schemas
+        run: |
+          find infra/k8s \
+            -path infra/k8s/kind -prune -o \
+            -name '*.yaml' -print | xargs kubeconform -strict -summary
+
+      - name: Validate Kubernetes manifests with kubectl dry-run if possible
+        continue-on-error: true
+        run: |
+          find infra/k8s \
+            -path infra/k8s/kind -prune -o \
+            -name '*.yaml' -print | xargs -I{} kubectl apply --dry-run=client --validate=false -f {}

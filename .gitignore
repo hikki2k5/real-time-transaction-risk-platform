@@ -1,0 +1,63 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Java / Spring Boot
+target/
+.g/
+.gp/
+.gradle/
+.gradle-home/
+gradle-cache/
+gradle-project-cache/
+build/
+out/
+
+# Spark / Airflow / MLflow local state
+spark-warehouse/
+metastore_db/
+airflow.db
+airflow_home/
+mlruns/
+model-artifacts/
+
+# Local data lake generated data
+data-lake/bronze/*
+data-lake/silver/*
+data-lake/quarantine/*
+data-lake/features/*
+data-lake/labels/*
+data-lake/checkpoints/*
+!data-lake/bronze/.gitkeep
+!data-lake/silver/.gitkeep
+!data-lake/quarantine/.gitkeep
+!data-lake/features/.gitkeep
+!data-lake/labels/.gitkeep
+!data-lake/checkpoints/.gitkeep
+
+# Logs and generated data
+*.log
+tmp/

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: banking-core-config
+  namespace: risk-platform
+data:
+  BANKING_CORE_PORT: "8084"
+  KAFKA_BOOTSTRAP_SERVERS: "host.docker.internal:9092"
+  TRANSACTION_EVENTS_TOPIC: "transaction_events"
+  FRAUD_API_BASE_URL: "http://fraud-decision-api:8000"

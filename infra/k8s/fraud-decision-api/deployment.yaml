@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-decision-api
+  namespace: risk-platform
+  labels:
+    app: fraud-decision-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fraud-decision-api
+  template:
+    metadata:
+      labels:
+        app: fraud-decision-api
+    spec:
+      containers:
+        - name: fraud-decision-api
+          image: fraud-decision-api:local
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: fraud-decision-api-config
+            - secretRef:
+                name: fraud-decision-api-secret
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"

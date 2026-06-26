@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fraud-decision-api-config
+  namespace: risk-platform
+data:
+  POSTGRES_HOST: "host.docker.internal"
+  POSTGRES_PORT: "55432"
+  POSTGRES_DB: "transaction_risk"
+  POSTGRES_USER: "risk_user"
+  MLFLOW_TRACKING_URI: "http://host.docker.internal:5000"
+  MODEL_NAME: "fraud-risk-model"
+  FALLBACK_MODEL_DIR: "/app/model-artifacts/fraud-risk-model"
