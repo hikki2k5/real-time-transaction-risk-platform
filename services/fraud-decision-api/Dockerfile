@@ -5,12 +5,14 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-COPY services/fraud-decision-api/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY services/fraud-decision-api/app ./app
-COPY pipelines/training/model-artifacts/fraud-risk-model ./model-artifacts/fraud-risk-model
+COPY app ./app
+COPY bundled-model/fraud-risk-model ./bundled-model/fraud-risk-model
+
+ENV FALLBACK_MODEL_DIR=/app/bundled-model/fraud-risk-model
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

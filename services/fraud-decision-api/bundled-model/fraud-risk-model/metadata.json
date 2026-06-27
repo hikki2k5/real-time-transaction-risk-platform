@@ -1,0 +1,36 @@
+{
+  "model_name": "fraud-risk-model",
+  "selected_candidate": "xgboost",
+  "feature_columns": [
+    "amount",
+    "tx_count_5min",
+    "tx_count_1h",
+    "tx_count_24h",
+    "spend_24h",
+    "avg_amount_7d",
+    "max_amount_7d",
+    "amount_stddev_7d",
+    "declined_tx_count_24h",
+    "overseas_tx_count_30d",
+    "unique_merchant_count_7d",
+    "cash_withdrawal_ratio_30d"
+  ],
+  "metrics": {
+    "pr_auc": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "confusion_matrix": [
+      [
+        6,
+        0
+      ],
+      [
+        0,
+        7
+      ]
+    ],
+    "roc_auc": 1.0
+  },
+  "label_note": "Synthetic labels are for local development only."
+}
