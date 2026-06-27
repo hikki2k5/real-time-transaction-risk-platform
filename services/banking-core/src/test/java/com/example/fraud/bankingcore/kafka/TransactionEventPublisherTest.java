@@ -17,7 +17,7 @@ class TransactionEventPublisherTest {
     @Test
     void publishesTransactionEventToConfiguredTopicWithTransactionIdKey() {
         KafkaTemplate<String, TransactionEvent> kafkaTemplate = org.mockito.Mockito.mock(KafkaTemplate.class);
-        TransactionEventPublisher publisher = new TransactionEventPublisher(kafkaTemplate, "transaction_events");
+        TransactionEventPublisher publisher = new TransactionEventPublisher(kafkaTemplate, "transaction_events", true);
         TransactionEvent event = new TransactionEvent(
                 "event-1",
                 "transaction-1",
@@ -39,4 +39,3 @@ class TransactionEventPublisherTest {
         verify(kafkaTemplate).send("transaction_events", "transaction-1", event);
     }
 }
-

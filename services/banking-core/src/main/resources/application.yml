@@ -1,11 +1,11 @@
 server:
-  port: ${BANKING_CORE_PORT:8084}
+  port: ${PORT:${BANKING_CORE_PORT:8084}}
 
 spring:
   application:
     name: banking-core
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:55432}/${POSTGRES_DB:transaction_risk}
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:55432}/${POSTGRES_DB:transaction_risk}?sslmode=${POSTGRES_SSLMODE:disable}
     username: ${POSTGRES_USER:risk_user}
     password: ${POSTGRES_PASSWORD:risk_password}
   kafka:
@@ -19,6 +19,7 @@ spring:
 app:
   kafka:
     transaction-events-topic: ${TRANSACTION_EVENTS_TOPIC:transaction_events}
+    publish-enabled: ${KAFKA_PUBLISH_ENABLED:true}
   fraud-api:
     base-url: ${FRAUD_API_BASE_URL:http://localhost:8000}
     connect-timeout-ms: ${FRAUD_API_CONNECT_TIMEOUT_MS:1000}

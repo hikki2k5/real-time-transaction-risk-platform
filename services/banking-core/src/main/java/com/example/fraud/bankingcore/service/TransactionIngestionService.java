@@ -122,8 +122,10 @@ public class TransactionIngestionService {
         normalizedIdempotencyKey.ifPresent(key -> idempotencyRepository.save(key, requestHash, response));
         String outboxId = transactionOutboxRepository.savePending(event);
         try {
-            transactionEventPublisher.publish(event);
-            transactionOutboxRepository.markPublished(outboxId, OffsetDateTime.now(clock));
+            boolean published = transactionEventPublisher.publish(event);
+            if (published) {
+                transactionOutboxRepository.markPublished(outboxId, OffsetDateTime.now(clock));
+            }
         } catch (RuntimeException ex) {
             transactionOutboxRepository.markFailed(outboxId, ex);
             throw ex;

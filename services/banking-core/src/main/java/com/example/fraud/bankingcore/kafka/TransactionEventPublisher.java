@@ -9,16 +9,22 @@ public class TransactionEventPublisher {
 
     private final KafkaTemplate<String, TransactionEvent> kafkaTemplate;
     private final String topic;
+    private final boolean publishEnabled;
 
     public TransactionEventPublisher(
             KafkaTemplate<String, TransactionEvent> kafkaTemplate,
-            @Value("${app.kafka.transaction-events-topic}") String topic) {
+            @Value("${app.kafka.transaction-events-topic}") String topic,
+            @Value("${app.kafka.publish-enabled:true}") boolean publishEnabled) {
         this.kafkaTemplate = kafkaTemplate;
         this.topic = topic;
+        this.publishEnabled = publishEnabled;
     }
 
-    public void publish(TransactionEvent event) {
+    public boolean publish(TransactionEvent event) {
+        if (!publishEnabled) {
+            return false;
+        }
         kafkaTemplate.send(topic, event.transactionId(), event);
+        return true;
     }
 }
-
