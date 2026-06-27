@@ -7,6 +7,8 @@ import java.util.List;
 import com.example.fraud.bankingcore.api.dto.Channel;
 import com.example.fraud.bankingcore.api.dto.TransactionRequest;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -23,10 +25,12 @@ public class FraudDecisionClient {
     @Autowired
     public FraudDecisionClient(
             RestTemplateBuilder restTemplateBuilder,
-            @Value("${app.fraud-api.base-url}") String fraudApiBaseUrl) {
+            @Value("${app.fraud-api.base-url}") String fraudApiBaseUrl,
+            @Value("${app.fraud-api.connect-timeout-ms}") long connectTimeoutMs,
+            @Value("${app.fraud-api.read-timeout-ms}") long readTimeoutMs) {
         this.restTemplate = restTemplateBuilder
-                .setConnectTimeout(java.time.Duration.ofSeconds(2))
-                .setReadTimeout(java.time.Duration.ofSeconds(2))
+                .setConnectTimeout(java.time.Duration.ofMillis(connectTimeoutMs))
+                .setReadTimeout(java.time.Duration.ofMillis(readTimeoutMs))
                 .build();
         this.fraudScoreUrl = fraudApiBaseUrl + "/v1/fraud-score";
     }
@@ -36,6 +40,8 @@ public class FraudDecisionClient {
         this.fraudScoreUrl = fraudApiBaseUrl + "/v1/fraud-score";
     }
 
+    @Retry(name = "fraudDecisionApi", fallbackMethod = "fallback")
+    @CircuitBreaker(name = "fraudDecisionApi", fallbackMethod = "fallback")
     public FraudDecision score(String transactionId, TransactionRequest request) {
         FraudScoreRequest fraudRequest = new FraudScoreRequest(
                 transactionId,
@@ -59,6 +65,11 @@ public class FraudDecisionClient {
         } catch (RestClientException ex) {
             return FraudDecision.reviewFallback();
         }
+    }
+
+    @SuppressWarnings("unused")
+    private FraudDecision fallback(String transactionId, TransactionRequest request, Throwable throwable) {
+        return FraudDecision.reviewFallback();
     }
 
     private record FraudScoreRequest(

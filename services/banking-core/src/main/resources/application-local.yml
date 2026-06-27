@@ -1,0 +1,4 @@
+# Local profile defaults. Override values through environment variables.
+app:
+  security:
+    enabled: false

@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: banking-core
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:55432}/${POSTGRES_DB:transaction_risk}
+    username: ${POSTGRES_USER:risk_user}
+    password: ${POSTGRES_PASSWORD:risk_password}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -17,3 +21,38 @@ app:
     transaction-events-topic: ${TRANSACTION_EVENTS_TOPIC:transaction_events}
   fraud-api:
     base-url: ${FRAUD_API_BASE_URL:http://localhost:8000}
+    connect-timeout-ms: ${FRAUD_API_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${FRAUD_API_READ_TIMEOUT_MS:1500}
+  security:
+    enabled: ${BANKING_CORE_SECURITY_ENABLED:false}
+    jwt-secret: ${BANKING_CORE_JWT_SECRET:local-dev-jwt-secret-change-me-32chars}
+  cors:
+    allowed-origins: ${DASHBOARD_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:8088}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      fraudDecisionApi:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+  retry:
+    instances:
+      fraudDecisionApi:
+        max-attempts: 2
+        wait-duration: 100ms

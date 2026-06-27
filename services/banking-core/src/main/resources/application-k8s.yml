@@ -1,0 +1,7 @@
+# kind profile uses host.docker.internal to reach Docker Compose services on Docker Desktop.
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:host.docker.internal}:${POSTGRES_PORT:55432}/${POSTGRES_DB:transaction_risk}
+app:
+  fraud-api:
+    base-url: ${FRAUD_API_BASE_URL:http://fraud-decision-api:8000}

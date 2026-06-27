@@ -25,6 +25,12 @@ dist/
 build/
 *.egg-info/
 
+# Node / Next.js
+node_modules/
+.next/
+build-output/
+npm-debug.log*
+
 # Java / Spring Boot
 target/
 .g/

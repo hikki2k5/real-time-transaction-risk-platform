@@ -20,9 +20,16 @@ POSTGRES_PASSWORD=risk_password
 MLFLOW_TRACKING_URI=http://localhost:5000
 MODEL_NAME=fraud-risk-model
 FALLBACK_MODEL_DIR=pipelines/training/model-artifacts/fraud-risk-model
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_ENABLED=true
+FEATURE_CACHE_TTL_SECONDS=300
 ```
 
 The service first tries to load `fraud-risk-model` from local MLflow. If MLflow is unavailable, it loads the local fallback artifact from `FALLBACK_MODEL_DIR`.
+
+Customer feature rows are cached in Redis by `user_id` when Redis is enabled. If Redis is unavailable, the service falls back to Postgres without failing the scoring request.
 
 ## Run Locally
 

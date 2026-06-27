@@ -1,8 +1,10 @@
 package com.example.fraud.bankingcore.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,30 +13,34 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 
+import com.example.fraud.bankingcore.account.AccountNotAvailableException;
+import com.example.fraud.bankingcore.account.AccountValidationService;
 import com.example.fraud.bankingcore.api.dto.Channel;
 import com.example.fraud.bankingcore.api.dto.CurrencyCode;
 import com.example.fraud.bankingcore.api.dto.TransactionAcceptedResponse;
 import com.example.fraud.bankingcore.api.dto.TransactionRequest;
 import com.example.fraud.bankingcore.api.dto.TransactionType;
+import com.example.fraud.bankingcore.audit.TransactionAuditRepository;
 import com.example.fraud.bankingcore.fraud.FraudDecision;
 import com.example.fraud.bankingcore.fraud.FraudDecisionClient;
+import com.example.fraud.bankingcore.idempotency.IdempotencyRepository;
+import com.example.fraud.bankingcore.idempotency.RequestHashingService;
 import com.example.fraud.bankingcore.kafka.TransactionEvent;
 import com.example.fraud.bankingcore.kafka.TransactionEventPublisher;
+import com.example.fraud.bankingcore.outbox.TransactionOutboxRepository;
 import org.junit.jupiter.api.Test;
 
 class TransactionIngestionServiceTest {
 
     @Test
     void generatesIdsAndPublishesAcceptedTransactionEvent() {
-        TransactionEventPublisher publisher = org.mockito.Mockito.mock(TransactionEventPublisher.class);
-        FraudDecisionClient fraudDecisionClient = org.mockito.Mockito.mock(FraudDecisionClient.class);
-        Clock clock = Clock.fixed(Instant.parse("2026-06-23T10:15:31Z"), ZoneOffset.UTC);
-        when(fraudDecisionClient.score(any(String.class), any(TransactionRequest.class)))
+        TestContext context = new TestContext();
+        when(context.fraudDecisionClient.score(any(String.class), any(TransactionRequest.class)))
                 .thenReturn(new FraudDecision("APPROVE", new BigDecimal("0.12"), "LOW", java.util.List.of("LOW_MODEL_SCORE")));
-        TransactionIngestionService service = new TransactionIngestionService(publisher, fraudDecisionClient, clock);
 
-        TransactionAcceptedResponse response = service.accept(validRequest());
+        TransactionAcceptedResponse response = context.service.accept(validRequest(), null);
 
         assertThat(response.status()).isEqualTo("ACCEPTED");
         assertThat(response.eventId()).isNotBlank();
@@ -43,25 +49,23 @@ class TransactionIngestionServiceTest {
         assertThat(response.fraudProbability()).isEqualByComparingTo("0.12");
         assertThat(response.riskLevel()).isEqualTo("LOW");
         assertThat(response.reasonCodes()).containsExactly("LOW_MODEL_SCORE");
-        verify(publisher).publish(any(TransactionEvent.class));
+        verify(context.accountValidationService).validateAccountCanTransact(eq(validRequest()));
+        verify(context.publisher).publish(any(TransactionEvent.class));
+        verify(context.auditRepository).recordAccepted(any(TransactionEvent.class), eq(validRequest()), eq(response));
+        verify(context.outboxRepository).savePending(any(TransactionEvent.class));
     }
 
     @Test
     void returnsFraudDecisionFromSuccessfulFraudApiCall() {
-        TransactionEventPublisher publisher = org.mockito.Mockito.mock(TransactionEventPublisher.class);
-        FraudDecisionClient fraudDecisionClient = org.mockito.Mockito.mock(FraudDecisionClient.class);
-        TransactionIngestionService service = new TransactionIngestionService(
-                publisher,
-                fraudDecisionClient,
-                Clock.fixed(Instant.parse("2026-06-23T10:15:31Z"), ZoneOffset.UTC));
-        when(fraudDecisionClient.score(any(String.class), any(TransactionRequest.class)))
+        TestContext context = new TestContext();
+        when(context.fraudDecisionClient.score(any(String.class), any(TransactionRequest.class)))
                 .thenReturn(new FraudDecision(
                         "BLOCK",
                         new BigDecimal("0.91"),
                         "HIGH",
                         java.util.List.of("HIGH_MODEL_SCORE", "HIGH_AMOUNT")));
 
-        TransactionAcceptedResponse response = service.accept(validRequest());
+        TransactionAcceptedResponse response = context.service.accept(validRequest(), null);
 
         assertThat(response.decision()).isEqualTo("BLOCK");
         assertThat(response.fraudProbability()).isEqualByComparingTo("0.91");
@@ -71,24 +75,57 @@ class TransactionIngestionServiceTest {
 
     @Test
     void returnsReviewFallbackWhenFraudApiTimesOutAndStillPublishesKafkaEvent() {
-        TransactionEventPublisher publisher = org.mockito.Mockito.mock(TransactionEventPublisher.class);
-        FraudDecisionClient fraudDecisionClient = org.mockito.Mockito.mock(FraudDecisionClient.class);
+        TestContext context = new TestContext();
         TransactionRequest request = validRequest();
-        TransactionIngestionService service = new TransactionIngestionService(
-                publisher,
-                fraudDecisionClient,
-                Clock.fixed(Instant.parse("2026-06-23T10:15:31Z"), ZoneOffset.UTC));
-        when(fraudDecisionClient.score(any(String.class), eq(request)))
+        when(context.fraudDecisionClient.score(any(String.class), eq(request)))
                 .thenReturn(FraudDecision.reviewFallback());
 
-        TransactionAcceptedResponse response = service.accept(request);
+        TransactionAcceptedResponse response = context.service.accept(request, null);
 
         assertThat(response.decision()).isEqualTo("REVIEW");
         assertThat(response.fraudProbability()).isEqualByComparingTo("0");
         assertThat(response.riskLevel()).isEqualTo("MEDIUM");
         assertThat(response.reasonCodes()).containsExactly("fraud service unavailable");
-        verify(publisher).publish(any(TransactionEvent.class));
-        verify(fraudDecisionClient).score(eq(response.transactionId()), eq(request));
+        verify(context.publisher).publish(any(TransactionEvent.class));
+        verify(context.fraudDecisionClient).score(eq(response.transactionId()), eq(request));
+    }
+
+    @Test
+    void returnsStoredResponseForRepeatedIdempotencyKey() {
+        TestContext context = new TestContext();
+        TransactionAcceptedResponse storedResponse = new TransactionAcceptedResponse(
+                "tx-existing",
+                "evt-existing",
+                "ACCEPTED",
+                "APPROVE",
+                new BigDecimal("0.10"),
+                "LOW",
+                java.util.List.of("LOW_MODEL_SCORE"));
+        when(context.requestHashingService.hash(any(TransactionRequest.class))).thenReturn("same-hash");
+        when(context.idempotencyRepository.find("idem-1"))
+                .thenReturn(Optional.of(new IdempotencyRepository.IdempotencyRecord(
+                        "idem-1",
+                        "same-hash",
+                        storedResponse)));
+
+        TransactionAcceptedResponse response = context.service.accept(validRequest(), "idem-1");
+
+        assertThat(response).isEqualTo(storedResponse);
+        verify(context.fraudDecisionClient, never()).score(any(String.class), any(TransactionRequest.class));
+        verify(context.publisher, never()).publish(any(TransactionEvent.class));
+    }
+
+    @Test
+    void rejectsTransactionWhenAccountCannotTransact() {
+        TestContext context = new TestContext();
+        org.mockito.Mockito.doThrow(new AccountNotAvailableException("account is frozen"))
+                .when(context.accountValidationService)
+                .validateAccountCanTransact(any(TransactionRequest.class));
+
+        assertThatThrownBy(() -> context.service.accept(validRequest(), null))
+                .isInstanceOf(AccountNotAvailableException.class)
+                .hasMessage("account is frozen");
+        verify(context.publisher, never()).publish(any(TransactionEvent.class));
     }
 
     private static TransactionRequest validRequest() {
@@ -104,5 +141,29 @@ class TransactionIngestionServiceTest {
                 "Sydney",
                 "PENDING",
                 OffsetDateTime.parse("2026-06-23T10:15:30Z"));
+    }
+
+    private static class TestContext {
+        final TransactionEventPublisher publisher = org.mockito.Mockito.mock(TransactionEventPublisher.class);
+        final FraudDecisionClient fraudDecisionClient = org.mockito.Mockito.mock(FraudDecisionClient.class);
+        final TransactionAuditRepository auditRepository = org.mockito.Mockito.mock(TransactionAuditRepository.class);
+        final AccountValidationService accountValidationService = org.mockito.Mockito.mock(AccountValidationService.class);
+        final IdempotencyRepository idempotencyRepository = org.mockito.Mockito.mock(IdempotencyRepository.class);
+        final RequestHashingService requestHashingService = org.mockito.Mockito.mock(RequestHashingService.class);
+        final TransactionOutboxRepository outboxRepository = org.mockito.Mockito.mock(TransactionOutboxRepository.class);
+        final TransactionIngestionService service = new TransactionIngestionService(
+                publisher,
+                fraudDecisionClient,
+                auditRepository,
+                accountValidationService,
+                idempotencyRepository,
+                requestHashingService,
+                outboxRepository,
+                Clock.fixed(Instant.parse("2026-06-23T10:15:31Z"), ZoneOffset.UTC));
+
+        TestContext() {
+            when(requestHashingService.hash(any(TransactionRequest.class))).thenReturn("request-hash");
+            when(outboxRepository.savePending(any(TransactionEvent.class))).thenReturn("outbox-1");
+        }
     }
 }

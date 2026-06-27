@@ -6,6 +6,7 @@ from typing import Any
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
+from app.cache import FeatureCache
 from app.config import Settings
 
 
@@ -36,8 +37,9 @@ CREATE INDEX IF NOT EXISTS idx_prediction_logs_user_created_at
 
 
 class PredictionRepository:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, feature_cache: FeatureCache | None = None):
         self.settings = settings
+        self.feature_cache = feature_cache or FeatureCache(settings)
 
     def _connect(self) -> Any:
         return psycopg2.connect(
@@ -49,6 +51,10 @@ class PredictionRepository:
         )
 
     def get_customer_features(self, user_id: str) -> dict[str, Any] | None:
+        cached_features = self.feature_cache.get(user_id)
+        if cached_features is not None:
+            return cached_features
+
         query = """
             SELECT
                 tx_count_5min,
@@ -71,7 +77,10 @@ class PredictionRepository:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute(query, (user_id,))
                 row = cursor.fetchone()
-        return dict(row) if row else None
+        features = dict(row) if row else None
+        if features is not None:
+            self.feature_cache.set(user_id, features)
+        return features
 
     def log_prediction(
         self,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 
 from fastapi import Depends, FastAPI, Response
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from app.config import Settings, get_settings
@@ -33,6 +34,14 @@ DECISION_COUNT = Counter(
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Fraud Decision API", version="0.1.0")
+    settings = get_settings()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.dashboard_allowed_origins,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Correlation-Id", "Idempotency-Key"],
+        expose_headers=["X-Correlation-Id"],
+    )
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

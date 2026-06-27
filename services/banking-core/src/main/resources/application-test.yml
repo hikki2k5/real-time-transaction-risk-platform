@@ -1,0 +1,4 @@
+# Test profile defaults keep external infrastructure optional.
+app:
+  security:
+    enabled: false

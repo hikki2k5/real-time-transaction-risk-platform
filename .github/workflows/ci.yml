@@ -53,6 +53,26 @@ jobs:
         working-directory: services/fraud-decision-api
         run: python -m pytest
 
+  auth-service-tests:
+    name: auth-service Java tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run auth-service tests
+        working-directory: services/auth-service
+        run: gradle test --no-daemon
+
   training-tests:
     name: training Python tests
     runs-on: ubuntu-latest
@@ -105,6 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - banking-core-tests
+      - auth-service-tests
       - fraud-decision-api-tests
     steps:
       - name: Checkout
@@ -119,6 +140,9 @@ jobs:
 
       - name: Build banking-core image
         run: docker build -t banking-core:ci services/banking-core
+
+      - name: Build auth-service image
+        run: docker build -t auth-service:ci services/auth-service
 
       - name: Build fraud-decision-api image
         run: docker build -t fraud-decision-api:ci -f services/fraud-decision-api/Dockerfile .

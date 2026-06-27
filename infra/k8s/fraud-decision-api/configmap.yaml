@@ -11,3 +11,8 @@ data:
   MLFLOW_TRACKING_URI: "http://host.docker.internal:5000"
   MODEL_NAME: "fraud-risk-model"
   FALLBACK_MODEL_DIR: "/app/model-artifacts/fraud-risk-model"
+  REDIS_HOST: "host.docker.internal"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_ENABLED: "true"
+  FEATURE_CACHE_TTL_SECONDS: "300"

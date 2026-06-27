@@ -10,6 +10,7 @@ It is a portfolio and learning project, not a production-ready banking system.
 
 ```text
 Spring Boot banking-core
+  -> Spring Boot auth-service for local JWT issuance
   -> FastAPI fraud-decision-api
   -> Kafka transaction_events
   -> Spark Structured Streaming
@@ -19,11 +20,28 @@ Spring Boot banking-core
   -> feature tables
   -> Python training
   -> MLflow
+  -> Redis online feature cache
   -> FastAPI model serving
   -> Postgres prediction logs
 ```
 
 Local Docker Compose runs the stateful development infrastructure. Local kind/Kubernetes deploys only the stateless app services: `banking-core` and `fraud-decision-api`.
+
+## Backend Engineering Highlights
+
+The main backend service is `services/banking-core`, a Java Spring Boot microservice designed around banking-style transaction ingestion. A separate `services/auth-service` Spring Boot service provides local register/login/JWT issuance for demo purposes.
+
+- REST API with validation, versioned routes, structured error responses, and OpenAPI docs.
+- Fraud decision integration with timeout, retry, circuit breaker, and safe `REVIEW` fallback behavior.
+- Kafka event publishing for accepted transaction events.
+- Best-effort Postgres audit persistence for transaction requests and responses.
+- Account status validation for banking-style transaction controls.
+- Optional `Idempotency-Key` handling to avoid duplicate transaction creation on client retries.
+- Local transactional outbox table for Kafka event publication tracking.
+- Correlation ID propagation through `X-Correlation-Id`.
+- Optional JWT resource-server security for protected endpoints.
+- Local auth-service with register/login/me, BCrypt password hashing, and JWT access tokens.
+- Actuator health/metrics endpoints for local operations.
 
 ## Tech Stack
 
@@ -33,6 +51,7 @@ Local Docker Compose runs the stateful development infrastructure. Local kind/Ku
 | Streaming | Kafka, Spark Structured Streaming |
 | Orchestration | Airflow |
 | Storage | Local filesystem data lake, Postgres warehouse |
+| Cache | Redis online feature cache |
 | ML/MLOps | LightGBM, XGBoost, scikit-learn metrics, MLflow |
 | Dev Infra | Docker Compose, kind, Kubernetes, Makefile |
 | Testing/CI | JUnit, pytest, unittest, GitHub Actions |
@@ -73,6 +92,7 @@ Postgres features -> training -> MLflow -> FastAPI serving -> prediction logs
 - LightGBM and XGBoost candidates are trained and evaluated with ROC-AUC, PR-AUC, precision, recall, F1, and confusion matrix.
 - Experiments and model artifacts are logged to local MLflow.
 - `fraud-decision-api` loads the latest MLflow model or a local fallback artifact and writes decisions to `mlops.prediction_logs`.
+- Redis caches online customer feature lookups by `user_id` to avoid hitting Postgres for repeated scoring requests.
 
 ### Backend Flow
 
@@ -81,16 +101,21 @@ Spring Boot transaction API -> fraud-decision-api -> Kafka event
 ```
 
 - `POST /internal/transactions` validates transaction requests.
+- `banking-core` checks account status when an account record exists locally.
+- `Idempotency-Key` lets clients safely retry transaction requests without creating duplicate responses.
 - `banking-core` calls `fraud-decision-api` before returning a response.
 - If the fraud API fails or times out, the transaction is still accepted with a safe fallback decision of `REVIEW`.
-- The transaction event is still published to Kafka.
+- The transaction event is recorded in `core.transaction_outbox` and then published to Kafka.
+- Accepted transaction requests are written to local Postgres audit tables when Postgres is available.
 
 ## Repository Layout
 
 ```text
 docs/                         Design notes and agent rules
 services/banking-core/         Spring Boot transaction ingestion service
+services/auth-service/         Spring Boot local auth and JWT issuer
 services/fraud-decision-api/   FastAPI fraud scoring service
+services/dashboard/            Next.js customer-facing transaction UI
 pipelines/spark-streaming/     Kafka to local data lake streaming job
 pipelines/airflow/dags/        Airflow orchestration DAGs
 pipelines/postgres/            Warehouse DDL and SQL transforms
@@ -125,6 +150,11 @@ Useful service URLs:
 | Airflow UI | http://localhost:8083 |
 | MLflow UI | http://localhost:5000 |
 | Postgres | `localhost:55432` |
+| Redis | `localhost:6379` |
+| auth-service | http://localhost:8085 |
+| banking-core | http://localhost:8084 |
+| fraud-decision-api | http://localhost:8000 |
+| dashboard | http://localhost:3000 |
 
 Stop local infrastructure:
 
@@ -138,6 +168,14 @@ Run `banking-core` locally:
 
 ```sh
 cd services/banking-core
+gradle test --no-daemon
+gradle bootRun --no-daemon
+```
+
+Run `auth-service` locally:
+
+```sh
+cd services/auth-service
 gradle test --no-daemon
 gradle bootRun --no-daemon
 ```
@@ -156,6 +194,17 @@ FastAPI docs:
 http://localhost:8000/docs
 ```
 
+Run the dashboard:
+
+```sh
+cd services/dashboard
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+The dashboard is a Next.js customer-facing UI. Users login/register, select an account, submit normal payment details, see an approved/review/blocked result, and view recent transactions. It is deployable as a normal Next.js app on v0/Vercel, but a deployed frontend needs public backend URLs because it cannot reach local `localhost` services on your laptop.
+
 ## Run End-to-End Demo
 
 The local e2e script sends a transaction through `banking-core`, checks the fraud decision response, looks for data lake outputs, and checks Postgres prediction logs.
@@ -171,6 +220,7 @@ A healthy local run should show no failures. Some checks may warn or skip if Spa
 kind is used only for stateless services:
 
 - `banking-core`
+- `auth-service`
 - `fraud-decision-api`
 
 Kafka, Spark, Airflow, Postgres, MLflow, and the local data lake stay in Docker Compose.
@@ -186,6 +236,7 @@ make k8s-status
 Local kind service ports:
 
 - `banking-core`: http://localhost:18084
+- `auth-service`: http://localhost:18085
 - `fraud-decision-api`: http://localhost:18080
 
 Delete the cluster:
@@ -195,6 +246,10 @@ make k8s-delete
 ```
 
 See `docs/KUBERNETES_DEPLOYMENT.md` for secret placeholders and smoke-test commands.
+
+## Cloud Readiness
+
+The current implementation is intentionally local-first. `docs/CLOUD_READINESS.md` describes how the same architecture could map to ECS/EKS, RDS Postgres, S3, Secrets Manager, managed Kafka, cloud monitoring, and FaaS in a future cloud version.
 
 ## Tests And CI
 
@@ -209,6 +264,7 @@ Service tests:
 
 ```sh
 cd services/banking-core && gradle test --no-daemon
+cd services/auth-service && gradle test --no-daemon
 cd services/fraud-decision-api && py -m pytest
 cd pipelines/training && py -m unittest discover -s tests
 cd pipelines/spark-streaming && py -m unittest discover -s tests
@@ -234,9 +290,11 @@ Add screenshots here after running the local demo:
 
 - Fraud labels are synthetic for local workflow testing.
 - Model metrics are smoke-test signals, not production accuracy claims.
-- No authentication or authorization is implemented yet.
+- JWT support exists for `banking-core`, and `auth-service` can issue local demo tokens.
+- Full enterprise OAuth2/OIDC, role-based authorization, and managed secrets are not implemented yet.
+- The local outbox records publish state but is not a full production-grade asynchronous relay with guaranteed broker acknowledgement.
 - Kafka, Spark, Airflow, Postgres, and MLflow are local development services only.
-- The online feature lookup uses Postgres directly; no low-latency feature store is implemented yet.
+- Redis is used as a local online feature cache, but it is not a full feature store with offline/online consistency guarantees.
 - Kubernetes deployment is local kind only and does not include production ingress, TLS, autoscaling metrics setup, or managed secrets.
 - Data contracts are early-stage and should be treated carefully before extension.
 
@@ -245,7 +303,7 @@ Add screenshots here after running the local demo:
 - Cloud data lake with S3.
 - Cloud warehouse with Snowflake.
 - dbt models and tests for warehouse transforms.
-- Redis online feature store for low-latency serving.
+- Expand Redis into a proper online feature store with offline/online consistency checks.
 - Evidently drift monitoring and model quality reports.
 - Terraform for reproducible infrastructure.
 - EKS deployment for managed Kubernetes.
@@ -267,6 +325,8 @@ Add screenshots here after running the local demo:
 
 ### Backend Engineer
 
-- Implemented a Spring Boot transaction ingestion API with request validation, Kafka event publishing, and fraud decision integration.
+- Implemented a Spring Boot transaction ingestion API with request validation, customer account listing, transaction history, Kafka event publishing, and fraud decision integration.
+- Added backend reliability patterns including idempotency keys, account status validation, local outbox tracking, fraud API timeouts, retry, circuit breaker, correlation IDs, structured errors, JWT support, and Postgres audit persistence.
+- Built a separate Spring Boot auth-service with register/login/me endpoints, BCrypt password hashing, and JWT access token issuance for local protected-route demos.
 - Built a FastAPI fraud decision service with health, model info, scoring, metrics, Postgres feature lookup, and decision rules.
 - Added local Docker and kind/Kubernetes deployment paths for stateless services with config maps, secret placeholders, probes, and resource limits.

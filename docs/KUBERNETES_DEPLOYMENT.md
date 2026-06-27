@@ -5,6 +5,7 @@
 Kubernetes with kind deploys only stateless services:
 
 - `banking-core`
+- `auth-service`
 - `fraud-decision-api`
 
 Kafka, Spark, Postgres, Airflow, MLflow, and the local data lake remain in Docker Compose for local development. Do not deploy those stateful services into kind for this project phase.
@@ -13,6 +14,7 @@ Kafka, Spark, Postgres, Airflow, MLflow, and the local data lake remain in Docke
 
 ```text
 kind:
+  auth-service
   banking-core
   fraud-decision-api
 
@@ -33,6 +35,7 @@ The kind services reach Docker Compose services through `host.docker.internal` o
 infra/k8s/kind/kind-config.yaml
 infra/k8s/namespace.yaml
 infra/k8s/banking-core/
+infra/k8s/auth-service/
 infra/k8s/fraud-decision-api/
 ```
 
@@ -50,6 +53,7 @@ Kubernetes services expose the app ports through NodePorts, and kind maps those 
 
 ```text
 banking-core:       localhost:18084 -> NodePort 30084 -> Service port 8084
+auth-service:       localhost:18085 -> NodePort 30085 -> Service port 8085
 fraud-decision-api: localhost:18080 -> NodePort 30080 -> Service port 8000
 ```
 
@@ -86,6 +90,7 @@ Images:
 
 ```text
 banking-core:local
+auth-service:local
 fraud-decision-api:local
 ```
 
@@ -104,8 +109,9 @@ make k8s-deploy
 Deployment order:
 
 1. Namespace
-2. `fraud-decision-api`
-3. `banking-core`
+2. `auth-service`
+3. `fraud-decision-api`
+4. `banking-core`
 
 ## Configure Secrets
 
@@ -123,6 +129,14 @@ kubectl rollout restart deployment/fraud-decision-api -n risk-platform
 ```
 
 `banking-core-secret` is currently a placeholder for future sensitive settings.
+For backend security and audit persistence, it now includes placeholder keys for:
+
+- `POSTGRES_PASSWORD`
+- `BANKING_CORE_JWT_SECRET`
+
+Keep `BANKING_CORE_SECURITY_ENABLED=false` for simple local smoke tests, or set it to `true` and provide a matching JWT when testing protected routes.
+
+`auth-service-secret` also uses placeholders for `POSTGRES_PASSWORD` and `BANKING_CORE_JWT_SECRET`. In local JWT demos, `auth-service` and `banking-core` must use the same JWT secret.
 
 ## Status
 
@@ -148,6 +162,7 @@ Check health endpoints:
 
 ```sh
 curl http://localhost:18080/health
+curl http://localhost:18085/health
 curl http://localhost:18084/health
 ```
 

@@ -1,6 +1,6 @@
 # Data Contracts
 
-Data contracts are intentionally not finalized in this skeleton.
+Data contracts are early-stage local contracts. They are stable enough for the current local demo, but should not be treated as production banking contracts.
 
 ## Contract Areas
 
@@ -10,6 +10,9 @@ Data contracts are intentionally not finalized in this skeleton.
 - Local data lake silver transaction layout.
 - Postgres fraud feature tables.
 - Fraud prediction request and response contract.
+- Backend transaction audit records.
+- Account records, idempotency keys, and transaction outbox records.
+- Local auth users and refresh token records.
 
 ## Change Control
 
@@ -17,8 +20,5 @@ Do not change data contracts unless explicitly asked. Contract changes must incl
 
 ## TODO
 
-- TODO Phase 1: Define transaction event schema.
-- TODO Phase 1: Define local data lake layouts.
-- TODO Phase 1: Define Postgres feature table schema.
-- TODO Phase 1: Define prediction API schema.
-- TODO Phase 8: Add contract tests.
+- TODO Future: Add formal JSON Schema or OpenAPI contract files.
+- TODO Future: Add consumer-driven contract tests across services.

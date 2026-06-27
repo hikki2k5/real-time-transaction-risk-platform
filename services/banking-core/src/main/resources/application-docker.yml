@@ -1,0 +1,7 @@
+# Docker profile uses Docker Compose service names where appropriate.
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:${POSTGRES_PORT:5432}/${POSTGRES_DB:transaction_risk}
+app:
+  fraud-api:
+    base-url: ${FRAUD_API_BASE_URL:http://fraud-decision-api:8000}

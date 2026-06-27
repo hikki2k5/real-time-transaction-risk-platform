@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: risk-platform
+data:
+  AUTH_SERVICE_PORT: "8085"
+  AUTH_JWT_ISSUER: "local-auth-service"
+  AUTH_ACCESS_TOKEN_TTL_MINUTES: "60"
+  SPRING_PROFILES_ACTIVE: "k8s"
+  POSTGRES_HOST: "host.docker.internal"
+  POSTGRES_PORT: "55432"
+  POSTGRES_DB: "transaction_risk"
+  POSTGRES_USER: "risk_user"
