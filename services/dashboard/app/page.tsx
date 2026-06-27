@@ -76,15 +76,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true);
-    const savedConfig = localStorage.getItem("risk-dashboard-config");
     const savedAuth = localStorage.getItem("risk-dashboard-auth");
-    if (savedConfig) setConfig(JSON.parse(savedConfig));
+    localStorage.removeItem("risk-dashboard-config");
     if (savedAuth) setAuth(JSON.parse(savedAuth));
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem("risk-dashboard-config", JSON.stringify(config));
-  }, [config]);
 
   useEffect(() => {
     localStorage.setItem("risk-dashboard-auth", JSON.stringify(auth));
