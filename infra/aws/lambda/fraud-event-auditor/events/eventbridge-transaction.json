@@ -1,0 +1,15 @@
+{
+  "version": "0",
+  "id": "local-eventbridge-001",
+  "detail-type": "TransactionRiskDecision",
+  "source": "risk-platform.banking-core",
+  "account": "000000000000",
+  "time": "2026-07-04T00:00:00Z",
+  "region": "ap-southeast-2",
+  "detail": {
+    "event_id": "event-002",
+    "transaction_id": "tx-002",
+    "user_id": "user-002",
+    "fraud_probability": 0.18
+  }
+}

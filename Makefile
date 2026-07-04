@@ -11,7 +11,7 @@ export BANKING_CORE_BUILD_DIR
 export AUTH_SERVICE_BUILD_DIR
 export GRADLE_USER_HOME
 
-.PHONY: help docker-check up down logs ps dashboard-dev dashboard-build test-backend test-all e2e k8s-create k8s-delete k8s-build-images k8s-load-images k8s-deploy k8s-status k8s-logs
+.PHONY: help docker-check up down logs ps dashboard-dev dashboard-build test-backend test-all serverless-test e2e k8s-create k8s-delete k8s-build-images k8s-load-images k8s-deploy k8s-status k8s-logs
 help:
 	@echo "Real-time Transaction Fraud Detection Platform"
 	@echo "make up    - start local infrastructure"
@@ -22,6 +22,7 @@ help:
 	@echo "make dashboard-build - build frontend dashboard"
 	@echo "make test-backend - run banking-core backend tests"
 	@echo "make test-all     - run local unit tests for backend and Python pipelines"
+	@echo "make serverless-test - run local AWS Lambda prototype tests"
 	@echo "make e2e   - run local end-to-end fraud detection smoke test"
 	@echo "make k8s-create       - create local kind cluster"
 	@echo "make k8s-delete       - delete local kind cluster"
@@ -60,6 +61,9 @@ test-all: test-backend
 	cd services/fraud-decision-api && py -m pytest
 	cd pipelines/training && py -m unittest discover -s tests
 	cd pipelines/spark-streaming && py -m unittest discover -s tests
+
+serverless-test:
+	cd infra/aws/lambda/fraud-event-auditor && py -m unittest discover -s tests
 
 e2e:
 	py tests/e2e/run_fraud_detection_flow.py

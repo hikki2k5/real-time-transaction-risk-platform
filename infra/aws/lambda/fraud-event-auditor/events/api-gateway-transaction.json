@@ -1,0 +1,6 @@
+{
+  "requestContext": {
+    "requestId": "local-request-001"
+  },
+  "body": "{\"event_id\":\"event-001\",\"transaction_id\":\"tx-001\",\"user_id\":\"user-001\",\"fraud_probability\":0.62,\"decision\":\"REVIEW\",\"risk_level\":\"MEDIUM\"}"
+}

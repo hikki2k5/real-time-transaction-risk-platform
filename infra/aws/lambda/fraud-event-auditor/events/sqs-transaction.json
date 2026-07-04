@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "local-sqs-message-001",
+      "body": "{\"event_id\":\"event-003\",\"transaction_id\":\"tx-003\",\"user_id\":\"user-003\",\"fraud_probability\":0.91}"
+    }
+  ]
+}

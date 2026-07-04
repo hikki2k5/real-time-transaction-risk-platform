@@ -2,7 +2,7 @@
 
 Free local-first banking-style fraud detection platform for demonstrating data engineering, MLOps, backend, and local Kubernetes skills.
 
-This project simulates a transaction risk workflow end to end: a Spring Boot banking API receives transactions, calls a FastAPI fraud scoring service, publishes events to Kafka, streams data into a local data lake, loads curated data into Postgres, builds feature tables, trains fraud models, logs experiments to MLflow, and records prediction decisions.
+This project simulates a transaction risk workflow end to end: a Spring Boot banking API receives transactions, calls a FastAPI fraud scoring service, publishes events to Kafka, streams data into a local data lake, loads curated data into Postgres, builds feature tables, trains fraud models, logs experiments to MLflow, and records prediction decisions. It also includes a small AWS SAM/Lambda serverless prototype for fraud audit events that can be tested locally without deploying cloud resources.
 
 It is a portfolio and learning project, not a production-ready banking system.
 
@@ -54,19 +54,20 @@ The main backend service is `services/banking-core`, a Java Spring Boot microser
 | Cache | Redis online feature cache |
 | ML/MLOps | LightGBM, XGBoost, scikit-learn metrics, MLflow |
 | Dev Infra | Docker Compose, kind, Kubernetes, Makefile |
+| Serverless Prototype | AWS Lambda style handler, AWS SAM template |
 | Testing/CI | JUnit, pytest, unittest, GitHub Actions |
 
 ## Local-first Design
 
 This repository is designed to run for free on a local machine:
 
-- No AWS.
+- No required AWS deployment.
 - No Snowflake.
 - No MinIO.
 - No paid cloud services.
 - Secrets and local credentials belong in `.env`, never in Git.
 
-Cloud services are listed only as future improvements, not as current project dependencies.
+AWS serverless files under `infra/aws/` are local prototypes only. They do not create cloud resources unless explicitly deployed.
 
 ## Main Flows
 
@@ -122,6 +123,7 @@ pipelines/postgres/            Warehouse DDL and SQL transforms
 pipelines/training/            Fraud model training pipeline
 infra/docker-compose.yml       Local infrastructure
 infra/k8s/                     kind/Kubernetes manifests
+infra/aws/                     Local AWS SAM/Lambda serverless prototype
 data-lake/                     Local bronze/silver/quarantine/features/labels folders
 tests/e2e/                     Local end-to-end demo script
 ```
@@ -214,6 +216,31 @@ make e2e
 ```
 
 A healthy local run should show no failures. Some checks may warn or skip if Spark, Airflow, or optional Kafka consumer dependencies have not been run yet.
+
+## AWS Serverless Prototype
+
+The repository includes a local AWS SAM/Lambda prototype for fraud audit events:
+
+```text
+infra/aws/lambda/fraud-event-auditor
+```
+
+It accepts API Gateway, EventBridge, SQS, or direct Lambda-style transaction risk events and returns normalized audit records. It is intentionally side-effect free and does not require AWS credentials.
+
+Run local unit tests:
+
+```sh
+make serverless-test
+```
+
+Optional local SAM invocation:
+
+```sh
+cd infra/aws/lambda/fraud-event-auditor
+sam local invoke FraudEventAuditorFunction -e events/api-gateway-transaction.json
+```
+
+Do not run `sam deploy` unless you intentionally want to create AWS resources and understand any cost implications.
 
 ## Kubernetes Deployment Summary
 

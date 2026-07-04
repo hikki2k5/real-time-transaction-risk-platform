@@ -6,9 +6,9 @@ Build a free local-first banking-style real-time transaction fraud detection pla
 
 ## Scope
 
-This repository contains a local-first implementation of the main platform pieces: Spring Boot auth and transaction ingestion, Kafka publishing, Spark lake ingestion, Airflow/Postgres transforms, model training, FastAPI model serving, local e2e checks, and kind manifests for stateless services.
+This repository contains a local-first implementation of the main platform pieces: Spring Boot auth and transaction ingestion, Kafka publishing, Spark lake ingestion, Airflow/Postgres transforms, model training, FastAPI model serving, local e2e checks, kind manifests for stateless services, and an optional AWS SAM/Lambda serverless prototype for fraud audit events.
 
-The project does not use AWS, Snowflake, MinIO, or paid cloud services.
+The core local platform does not require AWS, Snowflake, MinIO, or paid cloud services. AWS files under `infra/aws/` are local serverless prototypes and do not create cloud resources unless explicitly deployed.
 
 ## TODO
 

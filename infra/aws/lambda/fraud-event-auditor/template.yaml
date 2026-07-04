@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Local AWS SAM prototype for transaction fraud audit events.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 128
+    Architectures:
+      - x86_64
+
+Resources:
+  FraudEventAuditorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: fraud-event-auditor
+      Handler: app.lambda_handler
+      CodeUri: .
+      Description: Parses transaction risk events and creates audit records.
+      Environment:
+        Variables:
+          FRAUD_REVIEW_THRESHOLD: "0.40"
+          FRAUD_BLOCK_THRESHOLD: "0.80"
+      Events:
+        FraudAuditApi:
+          Type: Api
+          Properties:
+            Path: /fraud-audit
+            Method: post
+
+Outputs:
+  FraudEventAuditorFunction:
+    Description: Local AWS Lambda fraud event auditor prototype.
+    Value: !Ref FraudEventAuditorFunction
