@@ -20,13 +20,14 @@ Docker Compose runs Kafka, Kafka UI, Spark master, Spark worker, Airflow webserv
 
 ## Deployment Boundary
 
-Kubernetes with kind deploys only stateless services:
+The public demo deploys only the user-facing frontend and API services:
 
+- `dashboard`
 - `banking-core`
 - `auth-service`
 - `fraud-decision-api`
 
-Stateful local infrastructure such as Kafka, Postgres, Airflow, Spark, MLflow, and the local data lake is not deployed by the Kubernetes app manifests.
+Stateful development infrastructure such as Kafka, Postgres, Airflow, Spark, MLflow, Redis, and the local data lake remains local through Docker Compose. The public demo uses managed/free hosted services where practical and disables local-only Kafka publishing.
 
 ## TODO
 

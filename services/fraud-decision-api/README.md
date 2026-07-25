@@ -65,4 +65,3 @@ pytest
 
 - TODO Phase 8: Add authentication once API gateway design is defined.
 - TODO Phase 8: Add model promotion controls before production-style serving.
-- TODO Phase 9: Add Kubernetes manifests for stateless deployment.

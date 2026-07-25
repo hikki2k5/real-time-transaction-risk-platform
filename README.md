@@ -1,6 +1,6 @@
 # Real-time Transaction Fraud Detection Platform
 
-Free local-first banking-style fraud detection platform for demonstrating data engineering, MLOps, backend, and local Kubernetes skills.
+Free local-first banking-style fraud detection platform for demonstrating backend engineering, data engineering, MLOps, and serverless fundamentals.
 
 This project simulates a transaction risk workflow end to end: a Spring Boot banking API receives transactions, calls a FastAPI fraud scoring service, publishes events to Kafka, streams data into a local data lake, loads curated data into Postgres, builds feature tables, trains fraud models, logs experiments to MLflow, and records prediction decisions. It also includes a small AWS SAM/Lambda serverless prototype for fraud audit events that can be tested locally without deploying cloud resources.
 
@@ -25,7 +25,7 @@ Spring Boot banking-core
   -> Postgres prediction logs
 ```
 
-Local Docker Compose runs the stateful development infrastructure. Local kind/Kubernetes deploys only the stateless app services: `banking-core` and `fraud-decision-api`.
+Local Docker Compose runs the development infrastructure. The public demo deploys the frontend and API services only; stateful streaming and orchestration services remain local.
 
 ## Backend Engineering Highlights
 
@@ -53,7 +53,7 @@ The main backend service is `services/banking-core`, a Java Spring Boot microser
 | Storage | Local filesystem data lake, Postgres warehouse |
 | Cache | Redis online feature cache |
 | ML/MLOps | LightGBM, XGBoost, scikit-learn metrics, MLflow |
-| Dev Infra | Docker Compose, kind, Kubernetes, Makefile |
+| Dev Infra | Docker Compose, Makefile, Render/Vercel demo deployment |
 | Serverless Prototype | AWS Lambda style handler, AWS SAM template |
 | Testing/CI | JUnit, pytest, unittest, GitHub Actions |
 
@@ -122,7 +122,6 @@ pipelines/airflow/dags/        Airflow orchestration DAGs
 pipelines/postgres/            Warehouse DDL and SQL transforms
 pipelines/training/            Fraud model training pipeline
 infra/docker-compose.yml       Local infrastructure
-infra/k8s/                     kind/Kubernetes manifests
 infra/aws/                     Local AWS SAM/Lambda serverless prototype
 data-lake/                     Local bronze/silver/quarantine/features/labels folders
 tests/e2e/                     Local end-to-end demo script
@@ -242,41 +241,9 @@ sam local invoke FraudEventAuditorFunction -e events/api-gateway-transaction.jso
 
 Do not run `sam deploy` unless you intentionally want to create AWS resources and understand any cost implications.
 
-## Kubernetes Deployment Summary
-
-kind is used only for stateless services:
-
-- `banking-core`
-- `auth-service`
-- `fraud-decision-api`
-
-Kafka, Spark, Airflow, Postgres, MLflow, and the local data lake stay in Docker Compose.
-
-```sh
-make k8s-create
-make k8s-build-images
-make k8s-load-images
-make k8s-deploy
-make k8s-status
-```
-
-Local kind service ports:
-
-- `banking-core`: http://localhost:18084
-- `auth-service`: http://localhost:18085
-- `fraud-decision-api`: http://localhost:18080
-
-Delete the cluster:
-
-```sh
-make k8s-delete
-```
-
-See `docs/KUBERNETES_DEPLOYMENT.md` for secret placeholders and smoke-test commands.
-
 ## Cloud Readiness
 
-The current implementation is intentionally local-first. `docs/CLOUD_READINESS.md` describes how the same architecture could map to ECS/EKS, RDS Postgres, S3, Secrets Manager, managed Kafka, cloud monitoring, and FaaS in a future cloud version.
+The current implementation is intentionally local-first. `docs/CLOUD_READINESS.md` describes how the same architecture could map to ECS or Azure Container Apps, RDS Postgres, S3, Secrets Manager, managed Kafka, cloud monitoring, and FaaS in a future cloud version.
 
 ## Tests And CI
 
@@ -297,7 +264,7 @@ cd pipelines/training && py -m unittest discover -s tests
 cd pipelines/spark-streaming && py -m unittest discover -s tests
 ```
 
-GitHub Actions CI runs unit tests, Docker image builds, and Kubernetes YAML validation. It does not push images, start Docker Compose, or require AWS/Snowflake credentials.
+GitHub Actions CI runs unit tests and Docker image builds. It does not push images, start Docker Compose, or require AWS/Snowflake credentials.
 
 ## Screenshots
 
@@ -311,7 +278,6 @@ Add screenshots here after running the local demo:
 | Airflow DAG run success | TODO: add image |
 | MLflow experiment and registered model | TODO: add image |
 | FastAPI Swagger docs | TODO: add image |
-| Kubernetes pods in `risk-platform` namespace | TODO: add image |
 
 ## Known Limitations
 
@@ -322,7 +288,6 @@ Add screenshots here after running the local demo:
 - The local outbox records publish state but is not a full production-grade asynchronous relay with guaranteed broker acknowledgement.
 - Kafka, Spark, Airflow, Postgres, and MLflow are local development services only.
 - Redis is used as a local online feature cache, but it is not a full feature store with offline/online consistency guarantees.
-- Kubernetes deployment is local kind only and does not include production ingress, TLS, autoscaling metrics setup, or managed secrets.
 - Data contracts are early-stage and should be treated carefully before extension.
 
 ## Future Improvements
@@ -333,7 +298,6 @@ Add screenshots here after running the local demo:
 - Expand Redis into a proper online feature store with offline/online consistency checks.
 - Evidently drift monitoring and model quality reports.
 - Terraform for reproducible infrastructure.
-- EKS deployment for managed Kubernetes.
 - OAuth2/Keycloak for service and user authentication.
 
 ## CV Bullets
@@ -356,4 +320,3 @@ Add screenshots here after running the local demo:
 - Added backend reliability patterns including idempotency keys, account status validation, local outbox tracking, fraud API timeouts, retry, circuit breaker, correlation IDs, structured errors, JWT support, and Postgres audit persistence.
 - Built a separate Spring Boot auth-service with register/login/me endpoints, BCrypt password hashing, and JWT access token issuance for local protected-route demos.
 - Built a FastAPI fraud decision service with health, model info, scoring, metrics, Postgres feature lookup, and decision rules.
-- Added local Docker and kind/Kubernetes deployment paths for stateless services with config maps, secret placeholders, probes, and resource limits.

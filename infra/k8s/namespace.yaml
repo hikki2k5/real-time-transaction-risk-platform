@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: risk-platform
-  labels:
-    app.kubernetes.io/name: risk-platform
-    app.kubernetes.io/part-of: real-time-transaction-fraud-detection-platform
