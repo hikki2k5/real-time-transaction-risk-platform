@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.autoconfigure.jdbc.JdbcTest;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -41,13 +42,11 @@ class TransactionAuditRepositoryTest {
         registry.add("spring.datasource.password", postgres::getPassword);
     }
 
-    private final JdbcTemplate jdbcTemplate;
-    private final TransactionAuditRepository repository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
-    TransactionAuditRepositoryTest(JdbcTemplate jdbcTemplate, TransactionAuditRepository repository) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.repository = repository;
-    }
+    @Autowired
+    private TransactionAuditRepository repository;
 
     @BeforeEach
     void setUp() {
