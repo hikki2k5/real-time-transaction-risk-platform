@@ -133,10 +133,10 @@ jobs:
 
       - name: Create local fallback model placeholder for image build
         run: |
-          mkdir -p pipelines/training/model-artifacts/fraud-risk-model
+          mkdir -p services/fraud-decision-api/bundled-model/fraud-risk-model
           printf '{"model_name":"fraud-risk-model","selected_candidate":"ci-placeholder","feature_columns":[]}\n' \
-            > pipelines/training/model-artifacts/fraud-risk-model/metadata.json
-          printf 'ci-placeholder\n' > pipelines/training/model-artifacts/fraud-risk-model/model.joblib
+            > services/fraud-decision-api/bundled-model/fraud-risk-model/metadata.json
+          printf 'ci-placeholder\n' > services/fraud-decision-api/bundled-model/fraud-risk-model/model.joblib
 
       - name: Build banking-core image
         run: docker build -t banking-core:ci services/banking-core
@@ -145,4 +145,4 @@ jobs:
         run: docker build -t auth-service:ci services/auth-service
 
       - name: Build fraud-decision-api image
-        run: docker build -t fraud-decision-api:ci -f services/fraud-decision-api/Dockerfile .
+        run: docker build -t fraud-decision-api:ci services/fraud-decision-api
