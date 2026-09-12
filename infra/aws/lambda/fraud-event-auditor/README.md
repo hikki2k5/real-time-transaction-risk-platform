@@ -1,6 +1,6 @@
 # Fraud Event Auditor Lambda Prototype
 
-Local AWS serverless prototype for transaction fraud audit events.
+Local AWS serverless prototype for transaction fraud audit and ingestion events.
 
 This module demonstrates AWS Lambda/SAM development without requiring an AWS deployment. It is designed to be run locally and is safe for a free portfolio workflow.
 
@@ -13,7 +13,18 @@ The handler accepts a transaction risk decision event from one of these shapes:
 - SQS style batch record
 - direct Lambda invoke payload
 
-It returns normalized audit records containing:
+It validates the core event fields, returns normalized audit records, and also
+builds Kafka-ready stream events that can be connected to MSK/Kafka, Kinesis,
+EventBridge, or SQS in a real AWS deployment.
+
+Required fields:
+
+- `event_id`
+- `transaction_id`
+- `user_id`
+- `fraud_probability`
+
+Audit records contain:
 
 - `transaction_id`
 - `user_id`
@@ -21,6 +32,15 @@ It returns normalized audit records containing:
 - `risk_level`
 - `decision`
 - `requires_manual_review`
+
+Stream events contain:
+
+- `target_topic`
+- `stream_key`
+- `payload`
+
+Set `TARGET_STREAM_TOPIC` to override the default local topic name,
+`transaction_risk_events`.
 
 ## Run Tests
 
@@ -61,6 +81,7 @@ A production AWS design could connect this Lambda to:
 - API Gateway for synchronous audit ingestion
 - EventBridge for fraud decision events
 - SQS for retryable asynchronous processing
+- MSK/Kafka or Kinesis for streaming validated events into the data platform
 - DynamoDB or S3 for durable audit storage
 - CloudWatch for operational logs and metrics
 

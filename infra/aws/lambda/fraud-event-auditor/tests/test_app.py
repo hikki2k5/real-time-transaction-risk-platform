@@ -1,7 +1,8 @@
 import json
+import os
 import unittest
 
-from app import build_audit_record, lambda_handler
+from app import build_audit_record, build_ingestion_record, lambda_handler
 
 
 class FraudEventAuditorTest(unittest.TestCase):
@@ -39,6 +40,8 @@ class FraudEventAuditorTest(unittest.TestCase):
         self.assertEqual(200, response["statusCode"])
         body = json.loads(response["body"])
         self.assertEqual("APPROVE", body["audits"][0]["decision"])
+        self.assertEqual("transaction_risk_events", body["stream_events"][0]["target_topic"])
+        self.assertEqual("tx-002", body["stream_events"][0]["stream_key"])
 
     def test_sqs_event_extracts_records(self):
         response = lambda_handler(
@@ -61,6 +64,46 @@ class FraudEventAuditorTest(unittest.TestCase):
 
         self.assertEqual("BLOCK", response["audits"][0]["decision"])
         self.assertEqual("HIGH", response["audits"][0]["risk_level"])
+
+    def test_builds_kafka_ready_stream_event_with_configurable_topic(self):
+        os.environ["TARGET_STREAM_TOPIC"] = "local_transaction_events"
+        try:
+            ingestion = build_ingestion_record(
+                {
+                    "event_id": "event-004",
+                    "transaction_id": "tx-004",
+                    "user_id": "user-004",
+                    "fraud_probability": 0.41,
+                }
+            )
+        finally:
+            os.environ.pop("TARGET_STREAM_TOPIC", None)
+
+        self.assertTrue(ingestion["valid"])
+        self.assertEqual([], ingestion["errors"])
+        self.assertEqual("local_transaction_events", ingestion["stream_event"]["target_topic"])
+        self.assertEqual("tx-004", ingestion["stream_event"]["stream_key"])
+
+    def test_api_gateway_event_rejects_invalid_risk_payload(self):
+        response = lambda_handler(
+            {
+                "requestContext": {"requestId": "req-005"},
+                "body": json.dumps(
+                    {
+                        "event_id": "event-005",
+                        "transaction_id": "tx-005",
+                        "user_id": "user-005",
+                        "fraud_probability": 1.4,
+                    }
+                ),
+            },
+            None,
+        )
+
+        self.assertEqual(400, response["statusCode"])
+        body = json.loads(response["body"])
+        self.assertEqual([], body["stream_events"])
+        self.assertIn("fraud_probability must be between 0 and 1", body["invalid_records"][0]["errors"])
 
 
 if __name__ == "__main__":
