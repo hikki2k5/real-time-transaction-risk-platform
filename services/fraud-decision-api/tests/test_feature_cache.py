@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.config import Settings
+from app.metrics import FEATURE_CACHE_EVENTS
 from app.repository import PredictionRepository
 
 
@@ -50,11 +51,13 @@ def settings() -> Settings:
 def test_customer_feature_cache_hit_skips_postgres() -> None:
     cache = FakeCache(value={"tx_count_24h": 3})
     repository = FakeRepository(cache)
+    before = FEATURE_CACHE_EVENTS.labels(result="hit")._value.get()
 
     features = repository.get_customer_features("user-1")
 
     assert features == {"tx_count_24h": 3}
     assert repository.db_calls == 0
+    assert FEATURE_CACHE_EVENTS.labels(result="hit")._value.get() == before + 1
 
 
 def test_customer_feature_cache_can_be_disabled_without_redis_dependency() -> None:

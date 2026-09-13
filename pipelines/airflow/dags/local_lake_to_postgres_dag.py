@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import json
+import time
 from datetime import datetime
+from datetime import timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -12,6 +15,7 @@ from airflow.decorators import dag, task
 LOGGER = logging.getLogger(__name__)
 
 SILVER_RELATIVE_PATH = Path("silver") / "transactions_cleaned"
+METRICS_RELATIVE_PATH = Path("metrics") / "lake_to_postgres_transactions"
 DEFAULT_TRANSFORM_SQL_PATH = Path("/opt/airflow/postgres/transforms/raw_to_core_cleaned_transactions.sql")
 DEFAULT_DDL_PATH = Path("/opt/airflow/postgres/ddl")
 
@@ -82,10 +86,11 @@ def local_lake_to_postgres_transactions():
         return parquet_files
 
     @task
-    def load_raw_transactions(parquet_files: list[str]) -> int:
+    def load_raw_transactions(parquet_files: list[str]) -> dict[str, int]:
         import pyarrow.parquet as pq
         from psycopg2.extras import execute_values
 
+        start_time = time.perf_counter()
         _ensure_warehouse_tables()
 
         insert_sql = """
@@ -140,11 +145,17 @@ def local_lake_to_postgres_transactions():
             with connection.cursor() as cursor:
                 execute_values(cursor, insert_sql, rows, page_size=1000)
 
-        LOGGER.info("Raw rows loaded: %s", len(rows))
-        return len(rows)
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        LOGGER.info("Raw rows loaded: %s in %sms", len(rows), duration_ms)
+        return {
+            "raw_rows_loaded": len(rows),
+            "load_duration_ms": duration_ms,
+        }
 
     @task
-    def transform_raw_to_core(raw_rows_loaded: int) -> int:
+    def transform_raw_to_core(load_result: dict[str, int]) -> dict[str, int]:
+        start_time = time.perf_counter()
+        raw_rows_loaded = load_result["raw_rows_loaded"]
         transform_sql_path = Path(
             os.getenv("RAW_TO_CORE_SQL_PATH", str(DEFAULT_TRANSFORM_SQL_PATH))
         )
@@ -157,12 +168,45 @@ def local_lake_to_postgres_transactions():
                 core_row_count = cursor.fetchone()[0]
 
         LOGGER.info("Raw rows loaded in this run: %s", raw_rows_loaded)
-        LOGGER.info("Core rows after transform: %s", core_row_count)
-        return core_row_count
+        LOGGER.info(
+            "Core rows after transform: %s in %sms",
+            core_row_count,
+            int((time.perf_counter() - start_time) * 1000),
+        )
+        return {
+            "core_rows_after_transform": core_row_count,
+            "transform_duration_ms": int((time.perf_counter() - start_time) * 1000),
+        }
+
+    @task
+    def write_pipeline_metrics(
+        parquet_files: list[str],
+        load_result: dict[str, int],
+        transform_result: dict[str, int],
+    ) -> dict[str, Any]:
+        data_lake_root = Path(os.environ["DATA_LAKE_ROOT"])
+        metrics_path = data_lake_root / METRICS_RELATIVE_PATH
+        metrics_path.mkdir(parents=True, exist_ok=True)
+
+        report = {
+            "dag_id": "local_lake_to_postgres_transactions",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "source_file_count": len(parquet_files),
+            "raw_rows_loaded": load_result["raw_rows_loaded"],
+            "load_duration_ms": load_result["load_duration_ms"],
+            "core_rows_after_transform": transform_result["core_rows_after_transform"],
+            "transform_duration_ms": transform_result["transform_duration_ms"],
+            "source_files": parquet_files,
+        }
+        output_path = metrics_path / "latest.json"
+        output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        LOGGER.info("Wrote pipeline metrics report to %s", output_path)
+        return report
 
     parquet_files = find_silver_parquet_files()
-    raw_rows_loaded = load_raw_transactions(parquet_files)
-    transform_raw_to_core(raw_rows_loaded)
+    load_result = load_raw_transactions(parquet_files)
+    transform_result = transform_raw_to_core(load_result)
+    write_pipeline_metrics(parquet_files, load_result, transform_result)
 
 
 local_lake_to_postgres_transactions()

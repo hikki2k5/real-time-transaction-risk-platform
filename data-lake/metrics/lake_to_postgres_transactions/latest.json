@@ -1,0 +1,13 @@
+{
+  "dag_id": "local_lake_to_postgres_transactions",
+  "created_at": "2026-09-13T00:05:49.584759+00:00",
+  "source_file_count": 2,
+  "raw_rows_loaded": 50,
+  "load_duration_ms": 1236,
+  "core_rows_after_transform": 50,
+  "transform_duration_ms": 53,
+  "source_files": [
+    "/data-lake/silver/transactions_cleaned/year=2026/month=06/day=25/hour=10/part-00000-148c228d-c26d-4a48-a251-f23d5d2eb902.c000.snappy.parquet",
+    "/data-lake/silver/transactions_cleaned/year=2026/month=06/day=25/hour=14/part-00000-3d086ff0-19fe-430f-9982-23534df4973a.c000.snappy.parquet"
+  ]
+}

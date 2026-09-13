@@ -8,6 +8,7 @@ from psycopg2.extras import Json, RealDictCursor
 
 from app.cache import FeatureCache
 from app.config import Settings
+from app.metrics import FEATURE_CACHE_EVENTS, FEATURE_DB_LOOKUPS
 
 
 CREATE_PREDICTION_LOGS_SQL = """
@@ -53,7 +54,9 @@ class PredictionRepository:
     def get_customer_features(self, user_id: str) -> dict[str, Any] | None:
         cached_features = self.feature_cache.get(user_id)
         if cached_features is not None:
+            FEATURE_CACHE_EVENTS.labels(result="hit").inc()
             return cached_features
+        FEATURE_CACHE_EVENTS.labels(result="miss").inc()
 
         query = """
             SELECT
@@ -73,6 +76,7 @@ class PredictionRepository:
             FROM features.customer_transaction_features
             WHERE user_id = %s
         """
+        FEATURE_DB_LOOKUPS.inc()
         with self._connect() as connection:
             with connection.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute(query, (user_id,))

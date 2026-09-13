@@ -17,6 +17,8 @@ import com.example.fraud.bankingcore.idempotency.RequestHashingService;
 import com.example.fraud.bankingcore.kafka.TransactionEvent;
 import com.example.fraud.bankingcore.kafka.TransactionEventPublisher;
 import com.example.fraud.bankingcore.outbox.TransactionOutboxRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +33,9 @@ public class TransactionIngestionService {
     private final RequestHashingService requestHashingService;
     private final TransactionOutboxRepository transactionOutboxRepository;
     private final Clock clock;
+    private final Counter idempotencyHits;
+    private final Counter idempotencyMisses;
+    private final Counter idempotencyConflicts;
 
     @Autowired
     public TransactionIngestionService(
@@ -40,7 +45,8 @@ public class TransactionIngestionService {
             AccountValidationService accountValidationService,
             IdempotencyRepository idempotencyRepository,
             RequestHashingService requestHashingService,
-            TransactionOutboxRepository transactionOutboxRepository) {
+            TransactionOutboxRepository transactionOutboxRepository,
+            MeterRegistry meterRegistry) {
         this(
                 transactionEventPublisher,
                 fraudDecisionClient,
@@ -49,7 +55,8 @@ public class TransactionIngestionService {
                 idempotencyRepository,
                 requestHashingService,
                 transactionOutboxRepository,
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                meterRegistry);
     }
 
     TransactionIngestionService(
@@ -60,7 +67,8 @@ public class TransactionIngestionService {
             IdempotencyRepository idempotencyRepository,
             RequestHashingService requestHashingService,
             TransactionOutboxRepository transactionOutboxRepository,
-            Clock clock) {
+            Clock clock,
+            MeterRegistry meterRegistry) {
         this.transactionEventPublisher = transactionEventPublisher;
         this.fraudDecisionClient = fraudDecisionClient;
         this.transactionAuditRepository = transactionAuditRepository;
@@ -69,6 +77,18 @@ public class TransactionIngestionService {
         this.requestHashingService = requestHashingService;
         this.transactionOutboxRepository = transactionOutboxRepository;
         this.clock = clock;
+        this.idempotencyHits = Counter.builder("banking.idempotency.requests")
+                .description("Idempotency-key request outcomes.")
+                .tag("result", "hit")
+                .register(meterRegistry);
+        this.idempotencyMisses = Counter.builder("banking.idempotency.requests")
+                .description("Idempotency-key request outcomes.")
+                .tag("result", "miss")
+                .register(meterRegistry);
+        this.idempotencyConflicts = Counter.builder("banking.idempotency.requests")
+                .description("Idempotency-key request outcomes.")
+                .tag("result", "conflict")
+                .register(meterRegistry);
     }
 
     public TransactionAcceptedResponse accept(TransactionRequest request, String idempotencyKey) {
@@ -79,10 +99,13 @@ public class TransactionIngestionService {
                     idempotencyRepository.find(normalizedIdempotencyKey.get());
             if (existing.isPresent()) {
                 if (!existing.get().requestHash().equals(requestHash)) {
+                    idempotencyConflicts.increment();
                     throw new IdempotencyConflictException("idempotency key was already used with a different request");
                 }
+                idempotencyHits.increment();
                 return existing.get().response();
             }
+            idempotencyMisses.increment();
         }
 
         accountValidationService.validateAccountCanTransact(request);

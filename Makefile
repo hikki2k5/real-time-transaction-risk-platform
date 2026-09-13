@@ -9,7 +9,7 @@ export BANKING_CORE_BUILD_DIR
 export AUTH_SERVICE_BUILD_DIR
 export GRADLE_USER_HOME
 
-.PHONY: help docker-check up down logs ps dashboard-dev dashboard-build test-backend test-all serverless-test e2e
+.PHONY: help docker-check up down logs ps dashboard-dev dashboard-build test-backend test-all serverless-test e2e measure-optimizations benchmark-tps
 help:
 	@echo "Real-time Transaction Fraud Detection Platform"
 	@echo "make up    - start local infrastructure"
@@ -22,6 +22,8 @@ help:
 	@echo "make test-all     - run local unit tests for backend and Python pipelines"
 	@echo "make serverless-test - run local AWS Lambda prototype tests"
 	@echo "make e2e   - run local end-to-end fraud detection smoke test"
+	@echo "make measure-optimizations - print local optimization counters and row reports"
+	@echo "make benchmark-tps - run a 50-request local transaction API throughput benchmark"
 
 docker-check:
 	@docker info >NUL 2>NUL || (echo Docker is not running. Start Docker Desktop, wait for it to finish starting, then rerun this command. && exit 1)
@@ -58,3 +60,9 @@ serverless-test:
 
 e2e:
 	py tests/e2e/run_fraud_detection_flow.py
+
+measure-optimizations:
+	py tests/e2e/measure_local_optimizations.py
+
+benchmark-tps:
+	py tests/e2e/benchmark_transaction_tps.py

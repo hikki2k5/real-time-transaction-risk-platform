@@ -216,6 +216,66 @@ make e2e
 
 A healthy local run should show no failures. Some checks may warn or skip if Spark, Airflow, or optional Kafka consumer dependencies have not been run yet.
 
+## Measurable Optimization Checks
+
+These checks are useful for portfolio screenshots and CV numbers. They measure behavior in the local demo instead of claiming production scale.
+
+Quick local summary:
+
+```sh
+make measure-optimizations
+```
+
+The script also prints approximate local latency deltas for Redis cache reuse and idempotent retries. Treat these as local demo measurements, not production benchmarks.
+
+Run a small 50-request local throughput check for transaction submission:
+
+```sh
+make benchmark-tps
+```
+
+### 1. Fraud Feature Cache
+
+`fraud-decision-api` records Redis feature-cache hits, misses, and Postgres feature lookups. Run the same fraud-score request twice for the same `user_id`, then check metrics:
+
+```sh
+curl http://localhost:8000/metrics | grep fraud_feature
+```
+
+Expected metric names:
+
+```text
+fraud_feature_cache_events_total{result="hit"}
+fraud_feature_cache_events_total{result="miss"}
+fraud_feature_db_lookups_total
+```
+
+How to describe it honestly: "Instrumented Redis cache hit/miss metrics for online customer feature lookup to measure avoided Postgres reads during repeated fraud scoring."
+
+### 2. Banking Idempotency
+
+`banking-core` records idempotency outcomes for client retries:
+
+```sh
+curl http://localhost:8084/actuator/metrics/banking.idempotency.requests
+```
+
+Send the same transaction twice with the same `Idempotency-Key` to increase `result=hit`. Send a different payload with the same key to increase `result=conflict`.
+
+How to describe it honestly: "Added idempotency metrics to track accepted new keys, safe retry hits, and duplicate-key conflicts for transaction submission."
+
+### 3. Lake-to-Warehouse Rows
+
+After the Airflow DAG `local_lake_to_postgres_transactions` runs, check the generated local report:
+
+```sh
+cat data-lake/metrics/lake_to_postgres_transactions/latest.json
+```
+
+The report includes source file count, raw rows loaded, load duration, core table row count, and transform duration. Use it to quote measured local demo numbers such as rows loaded per DAG run.
+
+How to describe it honestly: "Added a pipeline run report that records source files, raw rows loaded, cleaned warehouse rows, and local processing duration after each lake-to-Postgres DAG run."
+
 ## AWS Serverless Prototype
 
 The repository includes a local AWS SAM/Lambda prototype for fraud audit events:

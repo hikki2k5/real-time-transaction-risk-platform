@@ -4,10 +4,11 @@ import time
 
 from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.config import Settings, get_settings
 from app.decision import build_reason_codes, classify_decision
+from app.metrics import DECISION_COUNT, REQUEST_COUNT, REQUEST_LATENCY
 from app.model import ModelProvider, build_feature_payload
 from app.repository import PredictionRepository
 from app.schemas import (
@@ -16,21 +17,6 @@ from app.schemas import (
     HealthResponse,
     ModelInfoResponse,
 )
-
-REQUEST_COUNT = Counter(
-    "fraud_decision_requests_total",
-    "Total fraud score requests.",
-)
-REQUEST_LATENCY = Histogram(
-    "fraud_decision_latency_seconds",
-    "Fraud score request latency in seconds.",
-)
-DECISION_COUNT = Counter(
-    "fraud_decision_decisions_total",
-    "Fraud decision count by label.",
-    ["decision"],
-)
-
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Fraud Decision API", version="0.1.0")

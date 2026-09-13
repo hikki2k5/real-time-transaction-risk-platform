@@ -26,6 +26,27 @@ py tests/e2e/run_fraud_detection_flow.py
 
 The script reads `.env` by default. If `.env` does not exist, it reads `.env.example`. Set `ENV_FILE` to point at another local env file.
 
+To collect local optimization counters for screenshots or CV notes:
+
+```sh
+make measure-optimizations
+```
+
+This sends a small set of local transaction requests, then prints Redis feature cache latency, banking idempotency retry latency, cache/idempotency counters, and the latest Airflow lake-to-warehouse row report if available.
+
+To run a small 50-request local throughput benchmark against `banking-core`:
+
+```sh
+make benchmark-tps
+```
+
+Optional overrides:
+
+```text
+BENCHMARK_REQUESTS=50
+BENCHMARK_CONCURRENCY=5
+```
+
 ## Environment
 
 ```text

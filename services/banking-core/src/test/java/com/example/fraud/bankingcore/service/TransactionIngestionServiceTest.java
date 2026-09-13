@@ -30,6 +30,7 @@ import com.example.fraud.bankingcore.idempotency.RequestHashingService;
 import com.example.fraud.bankingcore.kafka.TransactionEvent;
 import com.example.fraud.bankingcore.kafka.TransactionEventPublisher;
 import com.example.fraud.bankingcore.outbox.TransactionOutboxRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 class TransactionIngestionServiceTest {
@@ -111,8 +112,57 @@ class TransactionIngestionServiceTest {
         TransactionAcceptedResponse response = context.service.accept(validRequest(), "idem-1");
 
         assertThat(response).isEqualTo(storedResponse);
+        assertThat(context.meterRegistry.get("banking.idempotency.requests")
+                .tag("result", "hit")
+                .counter()
+                .count())
+                .isEqualTo(1.0);
         verify(context.fraudDecisionClient, never()).score(any(String.class), any(TransactionRequest.class));
         verify(context.publisher, never()).publish(any(TransactionEvent.class));
+    }
+
+    @Test
+    void recordsIdempotencyMissForNewKey() {
+        TestContext context = new TestContext();
+        when(context.idempotencyRepository.find("idem-new")).thenReturn(Optional.empty());
+        when(context.fraudDecisionClient.score(any(String.class), any(TransactionRequest.class)))
+                .thenReturn(new FraudDecision("APPROVE", new BigDecimal("0.12"), "LOW", java.util.List.of("LOW_MODEL_SCORE")));
+
+        context.service.accept(validRequest(), "idem-new");
+
+        assertThat(context.meterRegistry.get("banking.idempotency.requests")
+                .tag("result", "miss")
+                .counter()
+                .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void recordsIdempotencyConflictForSameKeyDifferentRequest() {
+        TestContext context = new TestContext();
+        TransactionAcceptedResponse storedResponse = new TransactionAcceptedResponse(
+                "tx-existing",
+                "evt-existing",
+                "ACCEPTED",
+                "APPROVE",
+                new BigDecimal("0.10"),
+                "LOW",
+                java.util.List.of("LOW_MODEL_SCORE"));
+        when(context.requestHashingService.hash(any(TransactionRequest.class))).thenReturn("new-hash");
+        when(context.idempotencyRepository.find("idem-1"))
+                .thenReturn(Optional.of(new IdempotencyRepository.IdempotencyRecord(
+                        "idem-1",
+                        "old-hash",
+                        storedResponse)));
+
+        assertThatThrownBy(() -> context.service.accept(validRequest(), "idem-1"))
+                .isInstanceOf(com.example.fraud.bankingcore.idempotency.IdempotencyConflictException.class);
+
+        assertThat(context.meterRegistry.get("banking.idempotency.requests")
+                .tag("result", "conflict")
+                .counter()
+                .count())
+                .isEqualTo(1.0);
     }
 
     @Test
@@ -151,6 +201,7 @@ class TransactionIngestionServiceTest {
         final IdempotencyRepository idempotencyRepository = org.mockito.Mockito.mock(IdempotencyRepository.class);
         final RequestHashingService requestHashingService = org.mockito.Mockito.mock(RequestHashingService.class);
         final TransactionOutboxRepository outboxRepository = org.mockito.Mockito.mock(TransactionOutboxRepository.class);
+        final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         final TransactionIngestionService service = new TransactionIngestionService(
                 publisher,
                 fraudDecisionClient,
@@ -159,7 +210,8 @@ class TransactionIngestionServiceTest {
                 idempotencyRepository,
                 requestHashingService,
                 outboxRepository,
-                Clock.fixed(Instant.parse("2026-06-23T10:15:31Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-06-23T10:15:31Z"), ZoneOffset.UTC),
+                meterRegistry);
 
         TestContext() {
             when(requestHashingService.hash(any(TransactionRequest.class))).thenReturn("request-hash");
