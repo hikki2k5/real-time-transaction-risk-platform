@@ -7,16 +7,16 @@ from typing import Any
 DEFAULT_REVIEW_THRESHOLD = 0.40
 DEFAULT_BLOCK_THRESHOLD = 0.80
 DEFAULT_TARGET_TOPIC = "transaction_risk_events"
+DEFAULT_AUDIT_PREFIX = "raw/fraud-audit"
 REQUIRED_EVENT_FIELDS = ("event_id", "transaction_id", "user_id", "fraud_probability")
 
 
 def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """AWS Lambda entry point for transaction fraud audit events.
 
-    The handler is intentionally side-effect free for the portfolio project:
-    it parses API Gateway, EventBridge, direct invoke, or SQS-style events,
-    validates transaction-risk payloads, and returns Kafka-ready stream events
-    that can later be published to MSK/Kafka, Kinesis, EventBridge, or SQS.
+    It parses API Gateway, EventBridge, direct invoke, or SQS-style events,
+    validates transaction-risk payloads, returns Kafka-ready stream events,
+    and stores valid audit records in S3 when AUDIT_BUCKET is configured.
     """
     records = extract_records(event)
     ingestion_records = [build_ingestion_record(record) for record in records]
@@ -27,6 +27,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         for record in ingestion_records
         if not record["valid"]
     ]
+    s3_objects = write_audits_to_s3([record["audit"] for record in ingestion_records if record["valid"]])
 
     if is_api_gateway_event(event):
         status_code = 200 if not invalid_records else 400
@@ -38,11 +39,17 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                     "audits": audits,
                     "stream_events": stream_events,
                     "invalid_records": invalid_records,
+                    "s3_objects": s3_objects,
                 }
             ),
         }
 
-    return {"audits": audits, "stream_events": stream_events, "invalid_records": invalid_records}
+    return {
+        "audits": audits,
+        "stream_events": stream_events,
+        "invalid_records": invalid_records,
+        "s3_objects": s3_objects,
+    }
 
 
 def extract_records(event: dict[str, Any]) -> list[dict[str, Any]]:
@@ -129,6 +136,35 @@ def make_audit_id(payload: dict[str, Any]) -> str:
     transaction_id = str(payload.get("transaction_id") or "unknown")
     event_id = str(payload.get("event_id") or "no-event")
     return f"audit-{transaction_id}-{event_id}"
+
+
+def write_audits_to_s3(audits: list[dict[str, Any]]) -> list[dict[str, str]]:
+    bucket = os.getenv("AUDIT_BUCKET", "").strip()
+    if not bucket or not audits:
+        return []
+
+    import boto3
+
+    client = boto3.client("s3")
+    written = []
+    for audit in audits:
+        key = build_s3_key(audit)
+        client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=json.dumps(audit).encode("utf-8"),
+            ContentType="application/json",
+        )
+        written.append({"bucket": bucket, "key": key})
+    return written
+
+
+def build_s3_key(audit: dict[str, Any]) -> str:
+    created_at = str(audit.get("created_at") or datetime.now(timezone.utc).isoformat())
+    date_path = created_at[:10].replace("-", "/")
+    audit_id = str(audit.get("audit_id") or "unknown-audit")
+    prefix = os.getenv("AUDIT_PREFIX", DEFAULT_AUDIT_PREFIX).strip("/")
+    return f"{prefix}/{date_path}/{audit_id}.json"
 
 
 def decision_from_probability(probability: float) -> str:

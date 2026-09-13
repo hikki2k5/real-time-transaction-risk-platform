@@ -2,7 +2,7 @@ import json
 import os
 import unittest
 
-from app import build_audit_record, build_ingestion_record, lambda_handler
+from app import build_audit_record, build_ingestion_record, build_s3_key, lambda_handler
 
 
 class FraudEventAuditorTest(unittest.TestCase):
@@ -20,6 +20,16 @@ class FraudEventAuditorTest(unittest.TestCase):
         self.assertEqual("REVIEW", audit["decision"])
         self.assertEqual("MEDIUM", audit["risk_level"])
         self.assertTrue(audit["requires_manual_review"])
+
+    def test_builds_date_partitioned_s3_key(self):
+        key = build_s3_key(
+            {
+                "audit_id": "audit-tx-001-event-001",
+                "created_at": "2026-09-13T10:00:00+00:00",
+            }
+        )
+
+        self.assertEqual("raw/fraud-audit/2026/09/13/audit-tx-001-event-001.json", key)
 
     def test_api_gateway_event_returns_http_response(self):
         response = lambda_handler(
@@ -42,6 +52,7 @@ class FraudEventAuditorTest(unittest.TestCase):
         self.assertEqual("APPROVE", body["audits"][0]["decision"])
         self.assertEqual("transaction_risk_events", body["stream_events"][0]["target_topic"])
         self.assertEqual("tx-002", body["stream_events"][0]["stream_key"])
+        self.assertEqual([], body["s3_objects"])
 
     def test_sqs_event_extracts_records(self):
         response = lambda_handler(

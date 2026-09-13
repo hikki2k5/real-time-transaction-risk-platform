@@ -11,6 +11,14 @@ Globals:
       - x86_64
 
 Resources:
+  FraudAuditBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
   FraudEventAuditorFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -22,6 +30,11 @@ Resources:
         Variables:
           FRAUD_REVIEW_THRESHOLD: "0.40"
           FRAUD_BLOCK_THRESHOLD: "0.80"
+          AUDIT_BUCKET: !Ref FraudAuditBucket
+          AUDIT_PREFIX: raw/fraud-audit
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref FraudAuditBucket
       Events:
         FraudAuditApi:
           Type: Api
@@ -33,3 +46,9 @@ Outputs:
   FraudEventAuditorFunction:
     Description: Local AWS Lambda fraud event auditor prototype.
     Value: !Ref FraudEventAuditorFunction
+  FraudAuditBucket:
+    Description: S3 bucket storing normalized fraud audit records.
+    Value: !Ref FraudAuditBucket
+  FraudAuditApi:
+    Description: API Gateway endpoint for fraud audit ingestion.
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/fraud-audit"

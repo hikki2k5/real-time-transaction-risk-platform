@@ -1,8 +1,8 @@
 # Fraud Event Auditor Lambda Prototype
 
-Local AWS serverless prototype for transaction fraud audit and ingestion events.
+AWS serverless prototype for transaction fraud audit and ingestion events.
 
-This module demonstrates AWS Lambda/SAM development without requiring an AWS deployment. It is designed to be run locally and is safe for a free portfolio workflow.
+This module demonstrates AWS Lambda/SAM development for a small portfolio-friendly deployment. It can be tested locally, or deployed to API Gateway, Lambda, and S3.
 
 ## Purpose
 
@@ -13,9 +13,9 @@ The handler accepts a transaction risk decision event from one of these shapes:
 - SQS style batch record
 - direct Lambda invoke payload
 
-It validates the core event fields, returns normalized audit records, and also
-builds Kafka-ready stream events that can be connected to MSK/Kafka, Kinesis,
-EventBridge, or SQS in a real AWS deployment.
+It validates the core event fields, returns normalized audit records, writes
+valid audit records to S3 when deployed with SAM, and also builds Kafka-ready
+stream events that can be connected to MSK/Kafka, Kinesis, EventBridge, or SQS.
 
 Required fields:
 
@@ -41,6 +41,14 @@ Stream events contain:
 
 Set `TARGET_STREAM_TOPIC` to override the default local topic name,
 `transaction_risk_events`.
+
+S3 output uses:
+
+- `AUDIT_BUCKET`
+- `AUDIT_PREFIX`, defaulting to `raw/fraud-audit`
+
+When `AUDIT_BUCKET` is not set, the handler remains side-effect free and only
+returns the normalized response.
 
 ## Run Tests
 
@@ -68,9 +76,24 @@ sam local invoke FraudEventAuditorFunction -e events/eventbridge-transaction.jso
 sam local invoke FraudEventAuditorFunction -e events/sqs-transaction.json
 ```
 
+## Deploy With AWS SAM
+
+```sh
+cd infra/aws/lambda/fraud-event-auditor
+sam build
+sam deploy --guided
+```
+
+The SAM template provisions:
+
+- API Gateway `POST /fraud-audit`
+- Lambda `fraud-event-auditor`
+- encrypted S3 bucket for normalized audit JSON records
+- Lambda permission to write objects to that bucket
+
 ## Cost Note
 
-This prototype does not create AWS resources by itself. Running unit tests or `sam local invoke` is local-only and should not incur AWS cost.
+Running unit tests or `sam local invoke` is local-only and should not incur AWS cost.
 
 Do not run `sam deploy` unless you intentionally want to create AWS resources and understand the account cost implications.
 
@@ -82,7 +105,7 @@ A production AWS design could connect this Lambda to:
 - EventBridge for fraud decision events
 - SQS for retryable asynchronous processing
 - MSK/Kafka or Kinesis for streaming validated events into the data platform
-- DynamoDB or S3 for durable audit storage
 - CloudWatch for operational logs and metrics
 
-Those cloud resources are intentionally not provisioned in this local-first project.
+The current SAM stack keeps the cloud scope intentionally small: API Gateway,
+Lambda, and S3 only.
