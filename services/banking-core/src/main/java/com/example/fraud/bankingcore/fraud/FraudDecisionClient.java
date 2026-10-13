@@ -9,16 +9,20 @@ import com.example.fraud.bankingcore.api.dto.TransactionRequest;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
 @Component
 public class FraudDecisionClient {
 
+    private static final Logger log = LoggerFactory.getLogger(FraudDecisionClient.class);
     private final RestTemplate restTemplate;
     private final String fraudScoreUrl;
 
@@ -55,6 +59,7 @@ public class FraudDecisionClient {
         try {
             FraudScoreResponse response = restTemplate.postForObject(fraudScoreUrl, fraudRequest, FraudScoreResponse.class);
             if (response == null) {
+                log.warn("Fraud call returned an empty response: transactionId={}", transactionId);
                 return FraudDecision.reviewFallback();
             }
             return new FraudDecision(
@@ -63,12 +68,22 @@ public class FraudDecisionClient {
                     response.riskLevel(),
                     response.reasonCodes() == null ? List.of() : response.reasonCodes());
         } catch (RestClientException ex) {
+            Throwable cause = ex;
+            while (cause.getCause() != null && cause.getCause() != cause) {
+                cause = cause.getCause();
+            }
+            log.warn("Fraud call failed: transactionId={}, errorType={}, causeType={}, httpStatus={}",
+                    transactionId, ex.getClass().getSimpleName(), cause.getClass().getSimpleName(),
+                    ex instanceof RestClientResponseException responseException
+                            ? responseException.getStatusCode().value() : "none");
             return FraudDecision.reviewFallback();
         }
     }
 
     @SuppressWarnings("unused")
     private FraudDecision fallback(String transactionId, TransactionRequest request, Throwable throwable) {
+        log.warn("Fraud resilience fallback: transactionId={}, errorType={}",
+                transactionId, throwable.getClass().getSimpleName());
         return FraudDecision.reviewFallback();
     }
 

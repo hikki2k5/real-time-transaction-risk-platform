@@ -66,4 +66,6 @@ data-lake/checkpoints/*
 
 # Logs and generated data
 *.log
+services/ai-assistant/logs/
+services/ai-assistant/.cache/
 tmp/

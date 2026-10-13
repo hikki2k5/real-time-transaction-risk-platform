@@ -2,7 +2,7 @@
 
 Free local-first banking-style fraud detection platform for demonstrating backend engineering, data engineering, MLOps, and serverless fundamentals.
 
-This project simulates a transaction risk workflow end to end: a Spring Boot banking API receives transactions, calls a FastAPI fraud scoring service, publishes events to Kafka, streams data into a local data lake, loads curated data into Postgres, builds feature tables, trains fraud models, logs experiments to MLflow, and records prediction decisions. It also includes a small AWS SAM/Lambda serverless prototype for fraud audit events that can be tested locally without deploying cloud resources.
+This project simulates a transaction risk workflow end to end: a Spring Boot banking API receives transactions, calls a FastAPI fraud scoring service, publishes events to Kafka, streams data into a local data lake, loads curated data into Postgres, builds feature tables, trains fraud models, logs experiments to MLflow, and records prediction decisions. It also includes a RAG-style fraud investigation assistant with tool calls, prompt versioning, safety checks, and evals, plus a small AWS SAM/Lambda serverless prototype for fraud audit events.
 
 It is a portfolio and learning project, not a production-ready banking system.
 
@@ -23,6 +23,7 @@ Spring Boot banking-core
   -> Redis online feature cache
   -> FastAPI model serving
   -> Postgres prediction logs
+  -> RAG/tool-calling fraud investigation assistant
 ```
 
 Local Docker Compose runs the development infrastructure. The public demo deploys the frontend and API services only; stateful streaming and orchestration services remain local.
@@ -53,6 +54,7 @@ The main backend service is `services/banking-core`, a Java Spring Boot microser
 | Storage | Local filesystem data lake, Postgres warehouse |
 | Cache | Redis online feature cache |
 | ML/MLOps | LightGBM, XGBoost, scikit-learn metrics, MLflow |
+| AI Assistant | FastAPI, Gemini, LangGraph, PostgreSQL/pgvector retrieval, prompt evals |
 | Dev Infra | Docker Compose, Makefile, Render/Vercel demo deployment |
 | Serverless Prototype | AWS Lambda style handler, AWS SAM template |
 | Testing/CI | JUnit, pytest, unittest, GitHub Actions |
@@ -95,6 +97,20 @@ Postgres features -> training -> MLflow -> FastAPI serving -> prediction logs
 - `fraud-decision-api` loads the latest MLflow model or a local fallback artifact and writes decisions to `mlops.prediction_logs`.
 - Redis caches online customer feature lookups by `user_id` to avoid hitting Postgres for repeated scoring requests.
 
+### AI Assistant Flow
+
+```text
+User question -> safety checks -> RAG retrieval -> transaction audit tools -> cited answer -> trace log
+```
+
+- `services/ai-assistant` exposes a FastAPI assistant for fraud investigation questions.
+- Knowledge files are chunked and retrieved with citations for fraud policy, Redis cache behavior, AWS audit ingestion, and production safety.
+- Agent-style tools can query Postgres transaction audit records by `transaction_id` or recent transactions by `user_id`.
+- Prompts are versioned in `prompts/fraud_investigation_v1.md` and treated like code.
+- Safety checks block prompt-injection/secret requests and redact common PII patterns.
+- Each query writes an observability trace with prompt version, model name, latency, token estimates, estimated cost, retrieved document IDs, tool calls, and guardrail flags.
+- Offline deterministic answers keep the portfolio demo free; the same interface can be swapped to GPT, Claude, Gemini, Llama, or Qwen later.
+
 ### Backend Flow
 
 ```text
@@ -116,6 +132,7 @@ docs/                         Design notes and agent rules
 services/banking-core/         Spring Boot transaction ingestion service
 services/auth-service/         Spring Boot local auth and JWT issuer
 services/fraud-decision-api/   FastAPI fraud scoring service
+services/ai-assistant/         RAG and tool-calling fraud investigation assistant
 services/dashboard/            Next.js customer-facing transaction UI
 pipelines/spark-streaming/     Kafka to local data lake streaming job
 pipelines/airflow/dags/        Airflow orchestration DAGs
@@ -155,6 +172,7 @@ Useful service URLs:
 | auth-service | http://localhost:8085 |
 | banking-core | http://localhost:8084 |
 | fraud-decision-api | http://localhost:8000 |
+| ai-assistant | http://localhost:8010 |
 | dashboard | http://localhost:3000 |
 
 Stop local infrastructure:
@@ -193,6 +211,22 @@ FastAPI docs:
 
 ```text
 http://localhost:8000/docs
+```
+
+Run the AI assistant:
+
+```sh
+cd services/ai-assistant
+py -m pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8010
+```
+
+Ask an investigation question:
+
+```sh
+curl -X POST http://localhost:8010/v1/assistant/query \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Why would a transaction be marked REVIEW?"}'
 ```
 
 Run the dashboard:
@@ -275,6 +309,29 @@ cat data-lake/metrics/lake_to_postgres_transactions/latest.json
 The report includes source file count, raw rows loaded, load duration, core table row count, and transform duration. Use it to quote measured local demo numbers such as rows loaded per DAG run.
 
 How to describe it honestly: "Added a pipeline run report that records source files, raw rows loaded, cleaned warehouse rows, and local processing duration after each lake-to-Postgres DAG run."
+
+## AI Assistant Evals
+
+The fraud investigation assistant includes a small regression eval set for portfolio-friendly AI engineering practice:
+
+```sh
+make ai-assistant-test
+make ai-assistant-eval
+```
+
+The eval reports:
+
+- retrieval hit rate for expected knowledge documents.
+- answer term pass rate for required explanation terms.
+- tool-call accuracy for transaction audit lookups.
+- prompt-injection block rate.
+- PII redaction pass rate.
+
+The assistant has an offline baseline and a Gemini mode using PostgreSQL/pgvector
+for document embeddings and LangGraph for tool calls. See
+[the service README](services/ai-assistant/README.md) for vector schema migration,
+private environment setup, operator authentication and live evaluation. Unit tests
+do not prove live Gemini quality; report live metrics only after running them.
 
 ## AWS Serverless Prototype
 
@@ -373,6 +430,12 @@ Add screenshots here after running the local demo:
 - Built a fraud model training pipeline using Postgres feature data, synthetic label generation, LightGBM, XGBoost, MLflow experiment tracking, and local fallback artifacts.
 - Evaluated imbalanced fraud models with PR-AUC, ROC-AUC, precision, recall, F1, and confusion matrix metrics.
 - Served model predictions through FastAPI with MLflow loading, fallback model support, Prometheus metrics, and prediction logging.
+
+### AI Engineer
+
+- Built an offline-first fraud investigation assistant with RAG retrieval, cited answers, transaction audit tool calls, prompt versioning, and FastAPI serving.
+- Added lightweight AI evals covering retrieval hit rate, answer quality terms, tool-call accuracy, prompt-injection blocking, and PII redaction.
+- Logged assistant traces with prompt version, model name, latency, token estimates, estimated cost, retrieved document IDs, tool calls, and guardrail flags.
 
 ### Backend Engineer
 

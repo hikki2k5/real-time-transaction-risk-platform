@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { CreditCard, MessageSquare } from "lucide-react";
+import AssistantChat from "./components/AssistantChat";
 
 type ApiConfig = {
   authBaseUrl: string;
@@ -62,6 +64,7 @@ const initialTransaction = {
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
+  const [view, setView] = useState<"transactions" | "assistant">("transactions");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [config, setConfig] = useState<ApiConfig>(defaultConfig);
   const [auth, setAuth] = useState<AuthState>({ accessToken: "", email: "", role: "", userId: "" });
@@ -174,6 +177,7 @@ export default function DashboardPage() {
   }
 
   function clearSession() {
+    setView("transactions");
     setAuth({ accessToken: "", email: "", role: "", userId: "" });
     setAccounts([]);
     setHistory([]);
@@ -243,7 +247,7 @@ export default function DashboardPage() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Secure Banking</p>
-          <h1>{reviewing ? "Review Transaction" : "New Transaction"}</h1>
+          <h1>{view === "assistant" ? "AI Assistant" : reviewing ? "Review Transaction" : "New Transaction"}</h1>
         </div>
         <div className="tokenBox">
           <span className={auth.accessToken ? "dot ok" : "dot"} />
@@ -252,6 +256,17 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      <nav className="workspaceNav" aria-label="Workspace">
+        <button type="button" className={view === "transactions" ? "selected" : "secondary"}
+          aria-pressed={view === "transactions"} onClick={() => setView("transactions")}>
+          <CreditCard size={17} aria-hidden="true" /> Transactions
+        </button>
+        <button type="button" className={view === "assistant" ? "selected" : "secondary"}
+          aria-pressed={view === "assistant"} onClick={() => setView("assistant")}>
+          <MessageSquare size={17} aria-hidden="true" /> AI Assistant
+        </button>
+      </nav>
+      <div hidden={view !== "transactions"}>
       <section className="customerLayout">
         <section className="panel transactionPanel">
           <div className="panelHeader">
@@ -287,6 +302,10 @@ export default function DashboardPage() {
           <TransactionHistory items={history} />
         </aside>
       </section>
+      </div>
+      <div hidden={view !== "assistant"}>
+        <AssistantChat accessToken={auth.accessToken} transactionId={result?.transaction_id} transactions={history} />
+      </div>
     </main>
   );
 }

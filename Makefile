@@ -9,7 +9,7 @@ export BANKING_CORE_BUILD_DIR
 export AUTH_SERVICE_BUILD_DIR
 export GRADLE_USER_HOME
 
-.PHONY: help docker-check up down logs ps dashboard-dev dashboard-build test-backend test-all serverless-test e2e measure-optimizations benchmark-tps
+.PHONY: help docker-check up down logs ps dashboard-dev dashboard-build test-backend test-all serverless-test ai-assistant-test ai-assistant-eval ai-assistant-dev e2e measure-optimizations benchmark-tps
 help:
 	@echo "Real-time Transaction Fraud Detection Platform"
 	@echo "make up    - start local infrastructure"
@@ -21,6 +21,9 @@ help:
 	@echo "make test-backend - run banking-core backend tests"
 	@echo "make test-all     - run local unit tests for backend and Python pipelines"
 	@echo "make serverless-test - run local AWS Lambda prototype tests"
+	@echo "make ai-assistant-test - run RAG/agent assistant unit tests"
+	@echo "make ai-assistant-eval - run RAG/agent assistant eval checks"
+	@echo "make ai-assistant-dev  - run the local AI assistant API"
 	@echo "make e2e   - run local end-to-end fraud detection smoke test"
 	@echo "make measure-optimizations - print local optimization counters and row reports"
 	@echo "make benchmark-tps - run a 50-request local transaction API throughput benchmark"
@@ -57,6 +60,15 @@ test-all: test-backend
 
 serverless-test:
 	cd infra/aws/lambda/fraud-event-auditor && py -m unittest discover -s tests
+
+ai-assistant-test:
+	cd services/ai-assistant && py -m unittest discover -s tests
+
+ai-assistant-eval:
+	cd services/ai-assistant && py evals/run_assistant_eval.py
+
+ai-assistant-dev:
+	cd services/ai-assistant && uvicorn app.main:app --reload --port 8010
 
 e2e:
 	py tests/e2e/run_fraud_detection_flow.py
