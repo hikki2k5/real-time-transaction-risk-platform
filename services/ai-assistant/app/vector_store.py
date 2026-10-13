@@ -21,7 +21,7 @@ class PgVectorStore:
             host=self.settings.postgres_host, port=self.settings.postgres_port,
             dbname=self.settings.postgres_db, user=self.settings.postgres_user,
             password=self.settings.postgres_password, sslmode=self.settings.postgres_sslmode,
-            connect_timeout=5, options="-c statement_timeout=10000",
+            connect_timeout=5,
         )
 
     def initialize(self):
@@ -30,6 +30,7 @@ class PgVectorStore:
         try:
             with connection:
                 with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL statement_timeout = '10s'")
                     cursor.execute(migration.read_text(encoding="utf-8"))
         finally:
             connection.close()
@@ -39,6 +40,7 @@ class PgVectorStore:
         try:
             with connection:
                 with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL statement_timeout = '10s'")
                     cursor.execute("""
                         SELECT chunk_count FROM ai.knowledge_versions
                         WHERE collection = %s AND version = %s
@@ -66,6 +68,7 @@ class PgVectorStore:
         try:
             with connection:
                 with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL statement_timeout = '10s'")
                     cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))",
                                    (self.settings.vector_collection + ":" + version,))
                     cursor.execute("""
@@ -93,6 +96,7 @@ class PgVectorStore:
         try:
             with connection:
                 with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL statement_timeout = '10s'")
                     cursor.execute("""
                         SELECT doc_id, title, content, 1 - (embedding <=> %s::vector) AS score
                         FROM ai.knowledge_chunks

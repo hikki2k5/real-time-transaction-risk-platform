@@ -35,6 +35,8 @@ class RiskTools:
         try:
             with closing(self._connect()) as connection, connection:
                 with connection.cursor(cursor_factory=self._cursor_factory()) as cursor:
+                    cursor.execute("SET TRANSACTION READ ONLY")
+                    cursor.execute("SET LOCAL statement_timeout = '5s'")
                     cursor.execute(query, params)
                     row = cursor.fetchone()
         except Exception as exc:
@@ -75,6 +77,8 @@ class RiskTools:
         try:
             with closing(self._connect()) as connection, connection:
                 with connection.cursor(cursor_factory=self._cursor_factory()) as cursor:
+                    cursor.execute("SET TRANSACTION READ ONLY")
+                    cursor.execute("SET LOCAL statement_timeout = '5s'")
                     cursor.execute(query, (user_id, max(1, min(limit, 10))))
                     rows = cursor.fetchall()
         except Exception as exc:
@@ -104,7 +108,6 @@ class RiskTools:
             password=self.settings.postgres_password,
             sslmode=self.settings.postgres_sslmode,
             connect_timeout=5,
-            options="-c statement_timeout=5000 -c default_transaction_read_only=on",
         )
 
     @staticmethod
