@@ -66,6 +66,26 @@ test('provider timeout returns retryable status', async () => {
   });
   assert.equal(result.status, 504);
 });
+test('auth timeout is distinct and does not call the assistant', async () => {
+  let calls = 0;
+  const result = await proxyAssistant(request(), config, async () => {
+    calls++;
+    throw new DOMException('timed out', 'TimeoutError');
+  });
+  assert.equal(result.status, 504);
+  assert.equal(calls, 1);
+  assert.match((await result.json()).message, /Sign-in verification timed out/);
+});
+test('auth network failure remains sanitized and does not bypass verification', async () => {
+  let calls = 0;
+  const result = await proxyAssistant(request(), config, async () => {
+    calls++;
+    throw new TypeError('private URL or credential details', { cause: { code: 'ENOTFOUND' } });
+  });
+  assert.equal(result.status, 503);
+  assert.equal(calls, 1);
+  assert.doesNotMatch(await result.text(), /private URL|credential/);
+});
 test('invalid provider answer is not forwarded', async () => {
   let calls = 0;
   const result = await proxyAssistant(request(), config, async () => ++calls === 1

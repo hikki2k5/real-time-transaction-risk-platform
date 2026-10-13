@@ -48,19 +48,33 @@ export async function proxyAssistant(request: Request, config: Config, fetcher: 
   const question = payload.question.trim();
   const transactionId = typeof payload.transaction_id === "string" ? payload.transaction_id.trim() : undefined;
   let userId: string;
+  const authStartedAt = Date.now();
   try {
     const identity = await fetcher(authUrl, {
       headers: { Authorization: authorization }, cache: "no-store", redirect: "error",
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)])
     });
     if (identity.status === 401 || identity.status === 403) return response(401, "Your session expired. Sign in again.");
-    if (!identity.ok) return response(503, "Sign-in verification is temporarily unavailable.");
+    if (!identity.ok) {
+      console.warn("assistant_auth_http_error", { host: new URL(authUrl).host, status: identity.status });
+      return response(503, "Sign-in verification is temporarily unavailable.");
+    }
     const user: unknown = await identity.json();
     if (!record(user) || typeof user.userId !== "string" || !user.userId || user.userId.length > 128) {
       return response(401, "Your session could not be verified. Sign in again.");
     }
     userId = user.userId;
-  } catch {
+  } catch (error) {
+    const cause = error instanceof Error && "cause" in error ? error.cause : undefined;
+    const errorCode = record(cause) && typeof cause.code === "string" ? cause.code : undefined;
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    console.warn("assistant_auth_request_failed", {
+      host: new URL(authUrl).host,
+      elapsedMs: Date.now() - authStartedAt,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      errorCode
+    });
+    if (timedOut) return response(504, "Sign-in verification timed out. Try again.");
     return response(503, "Sign-in verification is temporarily unavailable. Try again.");
   }
   try {
