@@ -1,0 +1,36 @@
+{
+  "version": "controlled-evidence-qa-v1",
+  "seed": 42,
+  "rows": 480,
+  "canonical_content_sha256": "4b2483b3a41858fc51af82c2ce59d2bccf32e9670a0479ed585587bd32a6a6a0",
+  "splits": {
+    "train": 288,
+    "dev": 96,
+    "test": 96
+  },
+  "scenario_groups": {
+    "train": 24,
+    "dev": 8,
+    "test": 8
+  },
+  "languages": {
+    "en": 240,
+    "vi": 240
+  },
+  "categories": {
+    "source": 80,
+    "storage": 80,
+    "processor": 80,
+    "decision": 80,
+    "missing": 80,
+    "injection": 80
+  },
+  "human_review_status": "NOT_HUMAN_REVIEWED",
+  "limitations": [
+    "Templated synthetic data, not independent real-world questions.",
+    "Vietnamese questions use English synthetic evidence and terse entity answers; not general Vietnamese conversational coverage.",
+    "Source/scenario and question templates are split, but relation schema and answer vocabularies are shared.",
+    "480 rows represent only 40 independent scenarios; rows are not independent observations.",
+    "Do not treat held-out template scores as production accuracy or fraud detection performance."
+  ]
+}

@@ -1,5 +1,11 @@
 # Retrieval and LoRA Experiments
 
+For the larger controlled bilingual dataset, train/dev/test selection, and
+step-by-step GPU commands, see [COLAB_EVIDENCE_SFT.md](COLAB_EVIDENCE_SFT.md).
+The committed `data/evidence_qa_v1.jsonl` contains 480 synthetic rows across
+40 scenarios, not 480 independent manually reviewed real-world questions.
+The manifest records generation provenance and limitations.
+
 Research utilities are isolated from the deployed Gemini API. They neither
 replace the production retriever nor change authentication. No Gemini key,
 customer database, or paid hosted GPU is needed for the local smoke runs.
