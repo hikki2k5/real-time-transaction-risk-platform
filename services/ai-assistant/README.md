@@ -1,5 +1,10 @@
 # Fraud Investigation AI Assistant
 
+Optional offline BM25/dense/hybrid retrieval experiments, cross-encoder reranking,
+and response-only LoRA SFT are documented in [research/README.md](research/README.md).
+These are separate from the deployed Gemini pipeline; smoke results are not
+production-quality or large-scale retrieval claims.
+
 Gemini RAG and LangGraph tool-calling assistant for the transaction risk platform.
 
 This service is intentionally offline-first for portfolio use: it uses a small
@@ -176,7 +181,35 @@ rates, not guaranteed free usage. Citations list retrieved evidence and do not
 guarantee generated claims are supported. Pattern-based safety is a baseline;
 use synthetic data. `/health` does not probe Gemini or PostgreSQL.
 
-## Deployment
+## Measure the Deployed Service
+
+From the repository root, no local database or Gemini key is needed:
+
+```powershell
+py services/ai-assistant/evals/measure_deployed_assistant.py --url https://risk-platform-ai-assistant.onrender.com --repeat 3 --output services/ai-assistant/logs/deployed_baseline.json
+```
+
+Enter the Render operator token at the hidden prompt (or set
+`AI_ASSISTANT_API_TOKEN` privately). This makes one warmup and 96 measured real
+requests with the default 32-case suite, sequentially with a two-second gap.
+It consumes Gemini API quota. API errors count against success and check rates;
+authentication/quota failures stop the run. Reports contain answers/tool data,
+so keep them private and ignored. Use synthetic audit IDs in eval cases.
+
+Report regular-query p50/p95 separately from cheap guardrail refusals. The
+source-coverage and keyword tests are smoke checks, not answer groundedness;
+manually review answers before stating quality claims. Remote measurements
+include laptop-to-Render network time and exclude the Vercel/auth route.
+
+After a specific optimization, rerun the exact command/workload with a new
+output filename and `--baseline services/ai-assistant/logs/deployed_baseline.json`.
+The report checks workload/model compatibility before calculating measured
+latency/input-token differences. Repeat runs and preserve answer quality;
+differences between an idle/cold service and a warm service do not by themselves
+prove code optimization. Existing Redis/idempotency measurements are separate
+backend results and must not be relabeled as AI improvements.
+
+## Render Deployment
 
 Use the Dockerfile with this service as its build context and port 8010. Set
 `AI_ASSISTANT_PROVIDER=gemini`, `GEMINI_API_KEY`, `GEMINI_MODEL`,
